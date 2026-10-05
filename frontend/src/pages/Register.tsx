@@ -38,15 +38,7 @@ export default function Register({ onSuccess }: { onSuccess: (token: string, use
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-      }}
-    >
+    <div className="auth-page">
       <div
         className="glass animate-in"
         style={{

@@ -33,10 +33,11 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-notes}
       JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET（可运行 ./scripts/gen-env.sh 自动生成）}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ICAL_TOKEN_TTL_DAYS: ${ICAL_TOKEN_TTL_DAYS:-90}
       PORT: "3000"
       NODE_ENV: production
       TZ: ${TZ:-Asia/Shanghai}
-      TRUST_PROXY: ${TRUST_PROXY:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}

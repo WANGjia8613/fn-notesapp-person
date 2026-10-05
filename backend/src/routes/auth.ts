@@ -17,15 +17,29 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       if (!parsed.success) return reply.code(400).send({ error: 'Invalid input' })
       const { email, password } = parsed.data
 
-      const user = await prisma.user.findFirst({
+      // 修复：email 的唯一约束是 (workspaceId, email)，跨团队可以存在同邮箱。
+      // 原实现用 findFirst({ where: { email } })，命中哪一个不确定，
+      // 等于把登录变成了"随机挑一个同名账号"。
+      // 现在明确处理：唯一命中才放行，多命中要求带上团队标识。
+      const matches = await prisma.user.findMany({
         where: { email },
         include: { workspace: true },
+        take: 2,
       })
-      if (!user) {
+
+      if (matches.length === 0) {
         // 用户不存在时也做一次等价的哈希运算，避免通过响应时间枚举账号
         await bcrypt.hash(password, 10)
         return reply.code(401).send({ error: 'Invalid credentials' })
       }
+
+      if (matches.length > 1) {
+        return reply
+          .code(409)
+          .send({ error: '该邮箱存在于多个团队，请联系管理员确认账号归属' })
+      }
+
+      const user = matches[0]
 
       const valid = await bcrypt.compare(password, user.passwordHash)
       if (!valid) return reply.code(401).send({ error: 'Invalid credentials' })

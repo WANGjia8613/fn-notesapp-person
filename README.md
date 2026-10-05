@@ -53,6 +53,18 @@ docker compose exec backend npm run seed
 > seed 默认创建 `admin@example.com`。**密码不再写死**：
 > 在 `.env` 里设置 `SEED_ADMIN_PASSWORD=...`，或留空由脚本随机生成并在输出里打印一次（请立即保存）。
 
+### 3.5 本地开发（不用 Docker）
+
+后端会自动加载项目根目录或 `backend/` 下的 `.env`（零依赖实现，无需 dotenv）：
+
+```bash
+cd backend
+npm install
+cp ../.env.example ../.env   # 填好 DATABASE_URL / JWT_SECRET
+npm run dev                  # tsx watch
+npm test                     # 单元测试
+```
+
 ### 4. 访问
 
 浏览器打开 `http://<你的飞牛IP>:8080`（端口由 `.env` 的 `APP_PORT` 控制），用上面的管理员账号登录。
@@ -94,12 +106,14 @@ curl -s -X DELETE http://127.0.0.1:8080/api/invitations/<id> -H "Authorization: 
 
 - **端口暴露最小化**：只有 `nginx` 映射到宿主机；`postgres(5432)` 与 `backend(3000)` 仅在 compose 内部网络可达，不对外暴露。
 - **CORS 默认关闭**：前后端同源（都经 Nginx）时不需要 CORS。确有跨域需求再设置 `CORS_ORIGIN`（白名单，逗号分隔）。
-- **登录限流**：`/api/auth/login`、`/api/auth/register`、邀请码校验、邮件测试接口均有限流；限流按真实客户端 IP 统计（`TRUST_PROXY=true`）。
+- **登录限流**：`/api/auth/login`、`/api/auth/register`、邀请码校验、邮件测试接口均有限流；限流按真实客户端 IP 统计。`TRUST_PROXY` 默认只信任私网段（不再是 `true`），避免伪造 `X-Forwarded-For` 绕过限流。
 - **JWT 过期**：token 默认 7 天过期（`JWT_EXPIRES_IN`），不再签发永不过期的 token。
 - **邮件内容转义**：笔记标题/标签/用户名在拼接 HTML 邮件前统一做 HTML 转义，防注入。
 - **笔记可见性统一口径**：公开笔记全团队可见；私有笔记仅作者 + 共享成员可见（owner 可管理全部）。列表、搜索、详情、日历订阅、汇总邮件、附件下载使用同一套判定逻辑。
 - **附件权限**：私有笔记的附件同样受可见性约束，非可见者无法下载。
+- **附件不执行**：附件的 MIME 由上传者声明、完全可控，因此下载接口只允许纯图片（png/jpeg/gif/webp）内联显示，其余类型一律降级为 `application/octet-stream` 并强制下载，同时带上 `X-Content-Type-Options: nosniff` 与 `Content-Security-Policy: default-src 'none'; sandbox`。这封堵了"上传 text/html 附件 → 在同源下执行脚本 → 窃取 localStorage 里的 JWT"这条存储型 XSS 路径。
 - **容器时区**：`TZ=Asia/Shanghai`，避免提醒时间按 UTC 触发。
+- **日历订阅链接有有效期**：iCal 订阅 token 带签发时间，默认 90 天过期（`ICAL_TOKEN_TTL_DAYS`），泄露后可自然失效，不必为了吊销一个链接而更换 `JWT_SECRET`。
 
 ## 目录结构
 
@@ -126,6 +140,9 @@ curl -s -X DELETE http://127.0.0.1:8080/api/invitations/<id> -H "Authorization: 
 # 本地开发：改完 schema.prisma 后生成迁移
 cd backend && npx prisma migrate dev --name <变更说明>
 
+# 单元测试（权限判定 / HTML 转义等纯函数，使用 Node 内置 test runner，无需额外依赖）
+cd backend && npm test
+
 # 服务器上应用迁移
 docker compose exec backend npx prisma migrate deploy
 ```
@@ -139,6 +156,15 @@ docker compose exec backend npx prisma migrate deploy
 | **M3 打磨** | Mermaid + 全文搜索 + iCal 订阅 + Webhook + 附件上传 + 备份 | ✅ |
 | **M4 加固** | 端口收敛 / 密钥 fail-fast / 限流 / 私有笔记共享 / 邮件转义 / 时区 / migration | ✅ |
 | **M5 团队管理** | 「团队与邀请」页面：邀请链接生成与复制、邀请记录与撤销、成员列表 | ✅ |
+| **M6 缺陷修复** | 附件 XSS 封堵 / 提醒引擎重写（改期同步、双时间、重试上限、共享成员）/ 汇总补偿窗口 / .env 加载 / 登录跨团队消歧 / iCal token 有效期 / ICS 行折叠与 VTIMEZONE / 前端首屏减重 / 单元测试 | ✅ |
+
+## 提醒引擎行为说明
+
+- 一篇笔记的 `remindAt`（提前提醒）与 `dueAt`（到期提醒）各自生成**一条独立提醒**，两个都填就都会发。
+- 提醒接收人是**作者 + 被显式共享的成员**（私有笔记的共享成员也能收到，与汇总邮件口径一致）。
+- 用户改期后，旧的 pending 提醒会被自动作废，并按新时间重建；已发送的提醒保留作历史记录。因此**改期、下个月再提醒都能正常工作**。
+- 发送失败会在原记录上累加 `attemptCount`，达到 5 次后置为 `failed` 并停止，不会无限重发。
+- 每日/每周汇总在设定时刻之后的 **30 分钟补偿窗口**内都可触发，由 `SendLog` 幂等键保证不重复发送；错过整点或首次发送失败都不会导致当天汇总永久丢失。
 
 ## 备份
 

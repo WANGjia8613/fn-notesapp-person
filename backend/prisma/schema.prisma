@@ -32,6 +32,11 @@ model User {
   notes        Note[]
   attachments  Attachment[]
   noteShares   NoteMember[]
+  // 下列三张表原先的 userId 是裸 String（无外键），删用户会留下孤儿数据，
+  // 这里补上关系并级联删除。
+  reminders    Reminder[]
+  summaryConfigs SummaryConfig[]
+  webhookConfigs WebhookConfig[]
 
   @@unique([workspaceId, email])
   @@index([workspaceId])
@@ -57,6 +62,8 @@ model Note {
 
   @@index([workspaceId])
   @@index([dueAt])
+  // 提醒引擎每分钟按 remindAt 扫描，缺索引会退化成全表扫
+  @@index([remindAt])
 }
 
 /// 私有笔记的共享成员（公开笔记不需要该表记录）
@@ -94,22 +101,30 @@ model Reminder {
   noteId      String?
   note        Note?     @relation(fields: [noteId], references: [id], onDelete: Cascade)
   userId      String?   // 接收者用户 ID
-  type        String    // "due"（到期提醒） / "summary"（汇总推送）
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String    // "due"（到期提醒） / "remind"（提前提醒） / "summary"（汇总推送）
   title       String
   body        String
   triggerAt   DateTime  // 计划触发时间
   channel     String    @default("email") // email / webhook
   status      String    @default("pending") // pending / sent / failed
+  // 失败重试计数：达到上限后停止重试，避免 SMTP 故障时无限刷邮件/刷表
+  attemptCount Int      @default(0)
   createdAt   DateTime  @default(now())
   sentAt      DateTime?
 
   @@index([workspaceId])
   @@index([status, triggerAt])
+  // 同一笔记的同一类提醒、同一触发时间只允许一条，
+  // 由数据库层面兜住提醒引擎的去重，避免并发 tick 产生重复记录。
+  // 注意：改期会产生新的 triggerAt，因此是一条新记录（旧记录会被引擎作废）。
+  @@unique([noteId, userId, type, triggerAt])
 }
 
 model SummaryConfig {
   id        String   @id @default(cuid())
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   frequency String   // "daily" / "weekly"
   time      String   // "09:00"（24小时制）
   enabled   Boolean  @default(true)
@@ -138,6 +153,7 @@ model SendLog {
 model WebhookConfig {
   id        String   @id @default(cuid())
   userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String   // 备注名，如"飞书群机器人"
   url       String
   type      String   @default("feishu") // feishu / dingtalk / wecom / generic

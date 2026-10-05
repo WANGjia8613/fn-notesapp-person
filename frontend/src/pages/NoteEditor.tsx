@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import mermaid from 'mermaid'
 import { notesApi, workspaceApi, authApi, attachmentApi } from '../api'
 import NoteSidebar from '../components/NoteSidebar'
 
@@ -14,24 +13,49 @@ const tabBtn: React.CSSProperties = {
   cursor: 'pointer',
 }
 
-mermaid.initialize({ startOnLoad: false, theme: 'default' })
+// mermaid 改为动态 import：它连同 elk / cytoscape / katex 等依赖体积超过 2MB，
+// 顶层静态引入会让首屏主包涨到 1MB 以上，而绝大多数笔记根本不含 mermaid 代码块。
+// 只有真正渲染到 ```mermaid 时才去加载，首次渲染会多一次网络往返（已加 loading 态）。
+let mermaidPromise: Promise<typeof import('mermaid')['default']> | null = null
+
+function loadMermaid() {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then((m) => {
+      const mermaid = m.default
+      mermaid.initialize({ startOnLoad: false, theme: 'default' })
+      return mermaid
+    })
+  }
+  return mermaidPromise
+}
 
 function MermaidBlock({ code }: { code: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!containerRef.current) return
-    const id = `mmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    mermaid
-      .render(id, code)
-      .then(({ svg }) => {
-        if (containerRef.current) containerRef.current.innerHTML = svg
-        setError('')
+    let cancelled = false
+    setLoading(true)
+    loadMermaid()
+      .then((mermaid) => {
+        if (cancelled || !containerRef.current) return
+        const id = `mmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        return mermaid.render(id, code).then(({ svg }) => {
+          if (cancelled) return
+          if (containerRef.current) containerRef.current.innerHTML = svg
+          setError('')
+          setLoading(false)
+        })
       })
       .catch((err) => {
+        if (cancelled) return
         setError(err instanceof Error ? err.message : String(err))
+        setLoading(false)
       })
+    return () => {
+      cancelled = true
+    }
   }, [code])
 
   if (error) {
@@ -42,7 +66,14 @@ function MermaidBlock({ code }: { code: string }) {
       </div>
     )
   }
-  return <div ref={containerRef} style={{ margin: '12px 0', textAlign: 'center' }} />
+  return (
+    <>
+      {loading && (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>图表加载中...</div>
+      )}
+      <div ref={containerRef} style={{ margin: '12px 0', textAlign: 'center' }} />
+    </>
+  )
 }
 
 const markdownComponents = {
@@ -173,7 +204,7 @@ export default function NoteEditor() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }} className="animate-in">
+    <div className="editor-layout animate-in">
       <div className="glass-card" style={{ flex: 1, minWidth: 340, padding: 24 }}>
         {/* 标签切换 + 操作按钮 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>

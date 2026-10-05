@@ -46,17 +46,7 @@ export default function NoteSidebar({
   }
 
   return (
-    <aside
-      className="glass-card"
-      style={{
-        width: 280,
-        flexShrink: 0,
-        padding: 20,
-        alignSelf: 'flex-start',
-        position: 'sticky',
-        top: 80,
-      }}
-    >
+    <aside className="glass-card note-sidebar">
       <h3
         style={{
           fontSize: 15,

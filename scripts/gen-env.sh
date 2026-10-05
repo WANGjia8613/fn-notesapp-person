@@ -37,8 +37,10 @@ POSTGRES_DB=notes
 
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=7d
+ICAL_TOKEN_TTL_DAYS=90
 TZ=Asia/Shanghai
-TRUST_PROXY=true
+# 留空 = 只信任私网段（Compose 部署的正确默认值）；不要改成 true
+TRUST_PROXY=
 
 APP_PORT=8080
 CORS_ORIGIN=

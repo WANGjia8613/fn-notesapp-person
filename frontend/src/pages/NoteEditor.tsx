@@ -173,84 +173,127 @@ export default function NoteEditor() {
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-      <div style={{ flex: 1, minWidth: 320, background: '#fff', border: '1px solid #e4e7eb', borderRadius: 8, padding: 20 }}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-          <button
-            onClick={() => setShowPreview(false)}
-            style={{ ...tabBtn, background: !showPreview ? '#2563eb' : '#f1f5f9', color: !showPreview ? '#fff' : '#475569' }}
+    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }} className="animate-in">
+      <div className="glass-card" style={{ flex: 1, minWidth: 340, padding: 24 }}>
+        {/* 标签切换 + 操作按钮 */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 4,
+              background: 'rgba(0,0,0,0.04)',
+              padding: 4,
+              borderRadius: 10,
+            }}
           >
-            编辑
-          </button>
-          <button
-            onClick={() => setShowPreview(true)}
-            style={{ ...tabBtn, background: showPreview ? '#2563eb' : '#f1f5f9', color: showPreview ? '#fff' : '#475569' }}
-          >
-            预览
-          </button>
+            <button
+              onClick={() => setShowPreview(false)}
+              style={{
+                padding: '7px 16px',
+                border: 'none',
+                borderRadius: 7,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: !showPreview ? 'white' : 'transparent',
+                color: !showPreview ? 'var(--primary-dark)' : 'var(--text-secondary)',
+                boxShadow: !showPreview ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              ✏️ 编辑
+            </button>
+            <button
+              onClick={() => setShowPreview(true)}
+              style={{
+                padding: '7px 16px',
+                border: 'none',
+                borderRadius: 7,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: showPreview ? 'white' : 'transparent',
+                color: showPreview ? 'var(--primary-dark)' : 'var(--text-secondary)',
+                boxShadow: showPreview ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              👁️ 预览
+            </button>
+          </div>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            style={{ ...tabBtn, background: '#f1f5f9', color: '#475569', opacity: uploading ? 0.6 : 1 }}
+            className="btn-secondary btn-sm"
+            style={{ opacity: uploading ? 0.6 : 1 }}
           >
             {uploading ? '上传中...' : '📎 附件'}
           </button>
           <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleUpload} />
           <div style={{ flex: 1 }} />
-          <button
-            id="save-toast"
-            onClick={save}
-            disabled={saving}
-            style={{ padding: '6px 16px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, fontSize: 14 }}
-          >
-            {saving ? '保存中...' : '保存'}
+          <button id="save-toast" onClick={save} disabled={saving} className="btn-primary btn-sm">
+            {saving ? '保存中...' : '💾 保存'}
           </button>
           {!isNew && (
-            <button
-              onClick={remove}
-              style={{ padding: '6px 16px', background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, fontSize: 14 }}
-            >
-              删除
+            <button onClick={remove} className="btn-danger btn-sm">
+              🗑️ 删除
             </button>
           )}
         </div>
 
+        {/* 标题输入 */}
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="笔记标题"
           style={{
             width: '100%',
-            fontSize: 20,
-            fontWeight: 600,
+            fontSize: 24,
+            fontWeight: 700,
             border: 'none',
             outline: 'none',
-            marginBottom: 12,
-            padding: '4px 0',
+            marginBottom: 16,
+            padding: '6px 0',
+            background: 'transparent',
+            color: 'var(--text)',
+            letterSpacing: '-0.02em',
           }}
         />
 
-        {error && <div style={{ color: '#dc2626', marginBottom: 12, fontSize: 14 }}>{error}</div>}
+        {error && (
+          <div
+            style={{
+              color: '#dc2626',
+              marginBottom: 12,
+              fontSize: 13,
+              background: 'rgba(220,38,38,0.08)',
+              padding: '10px 14px',
+              borderRadius: 8,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
+        {/* 编辑区 / 预览区 */}
         {showPreview ? (
-          <div className="markdown-body" style={{ minHeight: 400, lineHeight: 1.7 }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{bodyMd || '*暂无内容*'}</ReactMarkdown>
+          <div className="markdown-body" style={{ minHeight: 400, lineHeight: 1.75 }}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+              {bodyMd || '*暂无内容，开始写作吧 ✨*'}
+            </ReactMarkdown>
           </div>
         ) : (
           <textarea
             value={bodyMd}
             onChange={(e) => setBodyMd(e.target.value)}
-            placeholder="在这里用 Markdown 写作..."
+            placeholder="在这里用 Markdown 写作... 支持 # 标题、**粗体**、- 列表、```mermaid 图表等"
+            className="input-glass"
             style={{
-              width: '100%',
-              minHeight: 420,
-              border: '1px solid #e4e7eb',
-              borderRadius: 6,
-              padding: 12,
+              minHeight: 440,
               fontSize: 14,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontFamily: "'SF Mono', 'Fira Code', ui-monospace, Menlo, monospace",
               resize: 'vertical',
-              lineHeight: 1.6,
+              lineHeight: 1.7,
             }}
           />
         )}

@@ -2,23 +2,24 @@ import { useEffect, useState } from 'react'
 import { summaryApi, reminderApi, calendarApi, webhookApi } from '../api'
 import type { SummaryConfig, ReminderRecord, WebhookConfig } from '../types'
 
-const cardStyle: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #e4e7eb',
-  borderRadius: 8,
-  padding: 16,
-  marginBottom: 16,
-}
-
 const statusBadge = (status: string) => {
   const map: Record<string, { bg: string; color: string; label: string }> = {
-    pending: { bg: '#fef3c7', color: '#92400e', label: '待发送' },
-    sent: { bg: '#dcfce7', color: '#166534', label: '已发送' },
-    failed: { bg: '#fee2e2', color: '#991b1b', label: '失败' },
+    pending: { bg: 'rgba(245,158,11,0.12)', color: '#d97706', label: '待发送' },
+    sent: { bg: 'rgba(34,197,94,0.12)', color: '#16a34a', label: '已发送' },
+    failed: { bg: 'rgba(239,68,68,0.1)', color: '#dc2626', label: '失败' },
   }
-  const s = map[status] || { bg: '#f1f5f9', color: '#475569', label: status }
+  const s = map[status] || { bg: 'rgba(0,0,0,0.05)', color: '#64748b', label: status }
   return (
-    <span style={{ fontSize: 12, background: s.bg, color: s.color, padding: '2px 8px', borderRadius: 4 }}>
+    <span
+      style={{
+        fontSize: 12,
+        background: s.bg,
+        color: s.color,
+        padding: '3px 10px',
+        borderRadius: 20,
+        fontWeight: 600,
+      }}
+    >
       {s.label}
     </span>
   )
@@ -54,39 +55,36 @@ function ConfigCard({
   }
 
   return (
-    <div style={cardStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <div>
-          <strong style={{ fontSize: 15 }}>{title}</strong>
-          <div style={{ fontSize: 13, color: '#9aa5b1', marginTop: 2 }}>{desc}</div>
+    <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <strong style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{title}</strong>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>{desc}</div>
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, cursor: 'pointer' }}>
-          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 13,
+            cursor: 'pointer',
+            fontWeight: 600,
+            color: enabled ? 'var(--primary-dark)' : 'var(--text-muted)',
+            background: enabled ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.04)',
+            padding: '6px 12px',
+            borderRadius: 20,
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
           {enabled ? '已启用' : '已关闭'}
         </label>
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <span style={{ fontSize: 14, color: '#52606d' }}>发送时间</span>
-        <input
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          style={{ padding: '6px 10px', border: '1px solid #d0d7de', borderRadius: 4, fontSize: 14 }}
-        />
-        <button
-          onClick={save}
-          disabled={saving}
-          style={{
-            padding: '6px 16px',
-            background: '#2563eb',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 4,
-            fontSize: 14,
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          {saving ? '保存中...' : '保存'}
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>发送时间</span>
+        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="input-glass" style={{ width: 120, fontSize: 13, padding: '8px 10px' }} />
+        <button onClick={save} disabled={saving} className="btn-primary btn-sm" style={{ opacity: saving ? 0.6 : 1 }}>
+          {saving ? '保存中...' : '💾 保存'}
         </button>
       </div>
     </div>
@@ -149,98 +147,103 @@ export default function ReminderSettings() {
   }
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      <h2 style={{ fontSize: 20, marginBottom: 16 }}>提醒设置</h2>
+    <div style={{ maxWidth: 820, margin: '0 auto' }} className="animate-in">
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2 }}>提醒设置</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>配置邮件提醒、日历订阅、Webhook 推送和汇总规则</p>
+      </div>
 
-      {error && <div style={{ color: '#dc2626', marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div style={{ color: '#dc2626', marginBottom: 12, background: 'rgba(220,38,38,0.08)', padding: 12, borderRadius: 8 }}>
+          {error}
+        </div>
+      )}
 
       {/* 邮件测试 */}
-      <div style={cardStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong style={{ fontSize: 15 }}>邮件推送测试</strong>
-            <div style={{ fontSize: 13, color: '#9aa5b1', marginTop: 2 }}>
+      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <strong style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              📧 邮件推送测试
+            </strong>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 }}>
               向你的邮箱发送一封测试邮件，验证 SMTP 配置是否正确
             </div>
           </div>
-          <button
-            onClick={handleTest}
-            disabled={testing}
-            style={{
-              padding: '8px 18px',
-              background: '#16a34a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: 14,
-              opacity: testing ? 0.6 : 1,
-            }}
-          >
+          <button onClick={handleTest} disabled={testing} className="btn-primary" style={{ opacity: testing ? 0.6 : 1, whiteSpace: 'nowrap' }}>
             {testing ? '发送中...' : '发送测试邮件'}
           </button>
         </div>
         {testResult && (
-          <div style={{ marginTop: 12, padding: 10, background: '#f8fafc', borderRadius: 4, fontSize: 14 }}>{testResult}</div>
+          <div
+            style={{
+              marginTop: 14,
+              padding: '12px 14px',
+              background: 'rgba(34,197,94,0.06)',
+              borderRadius: 10,
+              fontSize: 13,
+              color: 'var(--text)',
+              border: '1px solid rgba(34,197,94,0.15)',
+            }}
+          >
+            {testResult}
+          </div>
         )}
       </div>
 
       {/* 日历订阅 */}
-      <div style={cardStyle}>
-        <strong style={{ fontSize: 15 }}>📅 日历订阅</strong>
-        <div style={{ fontSize: 13, color: '#9aa5b1', marginTop: 2 }}>
+      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
+        <strong style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>📅 日历订阅</strong>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3, marginBottom: 14 }}>
           将所有带到期时间的笔记订阅到 Apple 日历 / Google 日历 / Outlook，自动同步到期事件
         </div>
         {icalUrl ? (
-          <div style={{ marginTop: 12 }}>
+          <div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input
                 readOnly
                 value={icalUrl}
-                style={{
-                  flex: 1,
-                  padding: '8px 10px',
-                  border: '1px solid #d0d7de',
-                  borderRadius: 4,
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  background: '#f8fafc',
-                }}
+                className="input-glass"
+                style={{ flex: 1, fontSize: 12, fontFamily: "'SF Mono', monospace", padding: '10px 12px' }}
               />
-              <button
-                onClick={() => navigator.clipboard?.writeText(icalUrl)}
-                style={{ padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, fontSize: 14 }}
-              >
+              <button onClick={() => navigator.clipboard?.writeText(icalUrl)} className="btn-primary btn-sm">
                 复制
               </button>
             </div>
-            <div style={{ fontSize: 12, color: '#9aa5b1', marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
               在日历软件中选择「添加日历订阅」，粘贴上方 URL。每个事件会提前 1 小时弹出系统提醒。
             </div>
           </div>
         ) : (
-          <div style={{ color: '#9aa5b1', fontSize: 14, marginTop: 12 }}>加载中...</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 8 }}>加载中...</div>
         )}
       </div>
 
       {/* Webhook 推送 */}
-      <div style={cardStyle}>
-        <strong style={{ fontSize: 15 }}>🔔 Webhook 推送</strong>
-        <div style={{ fontSize: 13, color: '#9aa5b1', marginTop: 2 }}>
+      <div className="glass-card" style={{ padding: 20, marginBottom: 16 }}>
+        <strong style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>🔔 Webhook 推送</strong>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 3, marginBottom: 14 }}>
           提醒和汇总除了邮件，还会同时推送到飞书 / 钉钉 / 企业微信群机器人
         </div>
 
         {webhooks.length > 0 && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
             {webhooks.map((wh) => (
               <div
                 key={wh.id}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#f8fafc', borderRadius: 4 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 14px',
+                  background: 'rgba(0,0,0,0.02)',
+                  borderRadius: 10,
+                  border: '1px solid var(--border)',
+                }}
               >
-                <span style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>{wh.name}</span>
-                <span style={{ fontSize: 12, background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 4 }}>
-                  {wh.type}
-                </span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>{wh.name}</span>
+                <span className="tag">{wh.type}</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
                   <input
                     type="checkbox"
                     checked={wh.enabled}
@@ -248,6 +251,7 @@ export default function ReminderSettings() {
                       await webhookApi.update(wh.id, { enabled: e.target.checked })
                       setWebhooks(webhooks.map((w) => (w.id === wh.id ? { ...w, enabled: e.target.checked } : w)))
                     }}
+                    style={{ accentColor: 'var(--primary)' }}
                   />
                   {wh.enabled ? '启用' : '关闭'}
                 </label>
@@ -256,7 +260,7 @@ export default function ReminderSettings() {
                     await webhookApi.remove(wh.id)
                     setWebhooks(webhooks.filter((w) => w.id !== wh.id))
                   }}
-                  style={{ border: 'none', background: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 14 }}
+                  className="btn-danger btn-sm"
                 >
                   删除
                 </button>
@@ -265,23 +269,26 @@ export default function ReminderSettings() {
           </div>
         )}
 
-        <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             placeholder="名称（如：飞书群）"
             value={whName}
             onChange={(e) => setWhName(e.target.value)}
-            style={{ padding: '7px 10px', border: '1px solid #d0d7de', borderRadius: 4, fontSize: 13, width: 120 }}
+            className="input-glass"
+            style={{ width: 130, fontSize: 13, padding: '8px 10px' }}
           />
           <input
             placeholder="Webhook URL"
             value={whUrl}
             onChange={(e) => setWhUrl(e.target.value)}
-            style={{ padding: '7px 10px', border: '1px solid #d0d7de', borderRadius: 4, fontSize: 13, flex: 1, minWidth: 180 }}
+            className="input-glass"
+            style={{ flex: 1, minWidth: 180, fontSize: 13, padding: '8px 10px' }}
           />
           <select
             value={whType}
             onChange={(e) => setWhType(e.target.value)}
-            style={{ padding: '7px 10px', border: '1px solid #d0d7de', borderRadius: 4, fontSize: 13 }}
+            className="input-glass"
+            style={{ width: 100, fontSize: 13, padding: '8px 10px' }}
           >
             <option value="feishu">飞书</option>
             <option value="dingtalk">钉钉</option>
@@ -300,9 +307,9 @@ export default function ReminderSettings() {
                 alert(e instanceof Error ? e.message : '添加失败')
               }
             }}
-            style={{ padding: '7px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 4, fontSize: 14 }}
+            className="btn-primary btn-sm"
           >
-            添加
+            + 添加
           </button>
         </div>
       </div>
@@ -310,46 +317,34 @@ export default function ReminderSettings() {
       {/* 汇总配置 */}
       {configs && (
         <>
-          <ConfigCard
-            title="每日汇总"
-            desc="每天定时推送：今日到期、即将到期、最近更新的笔记"
-            config={configs.daily}
-            onSave={handleSave}
-          />
-          <ConfigCard
-            title="每周汇总"
-            desc="每周一定时推送：本周到期、即将到期、最近更新的笔记"
-            config={configs.weekly}
-            onSave={handleSave}
-          />
+          <ConfigCard title="📊 每日汇总" desc="每天定时推送：今日到期、即将到期、最近更新的笔记" config={configs.daily} onSave={handleSave} />
+          <ConfigCard title="📈 每周汇总" desc="每周一定时推送：本周到期、即将到期、最近更新的笔记" config={configs.weekly} onSave={handleSave} />
         </>
       )}
 
       {/* 提醒记录 */}
-      <div style={cardStyle}>
-        <strong style={{ fontSize: 15 }}>最近提醒记录</strong>
-        <div style={{ fontSize: 13, color: '#9aa5b1', marginBottom: 12 }}>最近 50 条到期提醒的发送状态</div>
+      <div className="glass-card" style={{ padding: 20 }}>
+        <strong style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>📋 最近提醒记录</strong>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14, marginTop: 3 }}>最近 50 条到期提醒的发送状态</div>
         {reminders.length === 0 ? (
-          <div style={{ color: '#9aa5b1', fontSize: 14, padding: '12px 0' }}>暂无提醒记录。给笔记设置到期时间或提醒时间后，系统会自动生成提醒。</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 14, padding: '20px 0', textAlign: 'center' }}>
+            暂无提醒记录。给笔记设置到期时间或提醒时间后，系统会自动生成提醒。
+          </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <table className="table-glass">
             <thead>
-              <tr style={{ textAlign: 'left', color: '#52606d', borderBottom: '1px solid #e4e7eb' }}>
-                <th style={{ padding: '8px 6px' }}>标题</th>
-                <th style={{ padding: '8px 6px' }}>触发时间</th>
-                <th style={{ padding: '8px 6px' }}>状态</th>
+              <tr>
+                <th>标题</th>
+                <th>触发时间</th>
+                <th>状态</th>
               </tr>
             </thead>
             <tbody>
               {reminders.map((r) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '8px 6px', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.title}
-                  </td>
-                  <td style={{ padding: '8px 6px', color: '#52606d', whiteSpace: 'nowrap' }}>
-                    {new Date(r.triggerAt).toLocaleString('zh-CN')}
-                  </td>
-                  <td style={{ padding: '8px 6px' }}>{statusBadge(r.status)}</td>
+                <tr key={r.id}>
+                  <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</td>
+                  <td style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{new Date(r.triggerAt).toLocaleString('zh-CN')}</td>
+                  <td>{statusBadge(r.status)}</td>
                 </tr>
               ))}
             </tbody>

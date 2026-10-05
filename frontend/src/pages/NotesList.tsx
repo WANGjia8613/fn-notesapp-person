@@ -27,86 +27,124 @@ export default function NotesList() {
   }, [onlyDue, search])
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <h2 style={{ fontSize: 20 }}>笔记列表</h2>
+    <div className="animate-in">
+      {/* 顶部标题 + 操作栏 */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 24,
+          flexWrap: 'wrap',
+          gap: 16,
+        }}
+      >
+        <div>
+          <h2 style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2 }}>笔记列表</h2>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>共 {notes.length} 篇笔记</p>
+        </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input
-            type="text"
-            placeholder="🔍 搜索标题/正文/标签"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ padding: '7px 12px', border: '1px solid #d0d7de', borderRadius: 6, fontSize: 14, width: 200 }}
-          />
-          <label style={{ fontSize: 14, color: '#52606d', display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} />
-            仅看有到期时间
-          </label>
-          <Link
-            to="/new"
-            style={{ padding: '8px 16px', background: '#2563eb', color: '#fff', borderRadius: 6, fontSize: 14 }}
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 14 }}>
+              🔍
+            </span>
+            <input
+              type="text"
+              placeholder="搜索标题/正文/标签"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="input-glass"
+              style={{ paddingLeft: 36, width: 240 }}
+            />
+          </div>
+          <label
+            style={{
+              fontSize: 13,
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              cursor: 'pointer',
+              background: 'rgba(255,255,255,0.5)',
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+            }}
           >
-            新建笔记
+            <input type="checkbox" checked={onlyDue} onChange={(e) => setOnlyDue(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
+            仅看到期
+          </label>
+          <Link to="/new" className="btn-primary">
+            + 新建笔记
           </Link>
         </div>
       </div>
 
-      {error && <div style={{ color: '#dc2626', marginBottom: 12 }}>{error}</div>}
+      {error && (
+        <div style={{ color: '#dc2626', marginBottom: 12, background: 'rgba(220,38,38,0.08)', padding: 12, borderRadius: 8 }}>
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <div style={{ color: '#52606d' }}>加载中...</div>
+        <div style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: 60 }}>加载中...</div>
       ) : notes.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#9aa5b1' }}>
-          还没有笔记，点击右上角「新建笔记」开始
+        <div
+          className="glass-card"
+          style={{ textAlign: 'center', padding: '60px 20px' }}
+        >
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📝</div>
+          <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>还没有笔记</h3>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 20 }}>
+            点击右上角「新建笔记」开始记录你的想法
+          </p>
+          <Link to="/new" className="btn-primary">
+            创建第一篇笔记
+          </Link>
         </div>
       ) : (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: 16,
           }}
         >
-          {notes.map((note) => (
+          {notes.map((note, idx) => (
             <Link
               key={note.id}
               to={`/notes/${note.id}`}
+              className="glass-card"
               style={{
-                background: '#fff',
-                border: '1px solid #e4e7eb',
-                borderRadius: 8,
-                padding: 14,
+                padding: 18,
                 display: 'block',
                 color: 'inherit',
+                animationDelay: `${idx * 0.05}s`,
               }}
             >
               <div
                 style={{
                   fontWeight: 600,
+                  fontSize: 16,
                   marginBottom: 6,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
+                  letterSpacing: '-0.01em',
                 }}
               >
                 {note.title || '无标题'}
               </div>
-              <div style={{ fontSize: 12, color: '#9aa5b1', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                 {note.author?.name} · {new Date(note.updatedAt).toLocaleDateString()}
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {note.dueAt && (
-                  <span style={{ fontSize: 12, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 4 }}>
-                    到期：{new Date(note.dueAt).toLocaleDateString()}
-                  </span>
+                  <span className="tag tag-due">⏰ {new Date(note.dueAt).toLocaleDateString()}</span>
                 )}
-                {note.isPrivate && (
-                  <span style={{ fontSize: 12, background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: 4 }}>
-                    私有
-                  </span>
-                )}
+                {note.isPrivate && <span className="tag">🔒 私有</span>}
                 {note.tags.slice(0, 3).map((t) => (
-                  <span key={t} style={{ fontSize: 12, background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: 4 }}>
+                  <span key={t} className="tag">
                     #{t}
                   </span>
                 ))}

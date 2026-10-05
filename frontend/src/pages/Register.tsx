@@ -3,23 +3,6 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '../api'
 import type { User } from '../types'
 
-const inputStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  border: '1px solid #d0d7de',
-  borderRadius: 6,
-  fontSize: 14,
-}
-
-const buttonStyle: React.CSSProperties = {
-  padding: '10px',
-  border: 'none',
-  borderRadius: 6,
-  background: '#2563eb',
-  color: '#fff',
-  fontSize: 14,
-  fontWeight: 600,
-}
-
 export default function Register({ onSuccess }: { onSuccess: (token: string, user: User) => void }) {
   const [params] = useSearchParams()
   const token = params.get('token') || ''
@@ -57,49 +40,110 @@ export default function Register({ onSuccess }: { onSuccess: (token: string, use
   return (
     <div
       style={{
-        maxWidth: 400,
-        margin: '80px auto',
-        padding: 24,
-        background: '#fff',
-        borderRadius: 10,
-        border: '1px solid #e4e7eb',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
       }}
     >
-      <h2 style={{ marginBottom: 16 }}>邀请注册</h2>
-      {inviteInfo && (
-        <div
-          style={{
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-            borderRadius: 6,
-            padding: 10,
-            marginBottom: 16,
-            fontSize: 14,
-          }}
-        >
-          你被邀请加入 <strong>{inviteInfo.workspaceName}</strong>
-          <br />
-          注册邮箱：<strong>{inviteInfo.email}</strong>
+      <div
+        className="glass animate-in"
+        style={{
+          width: '100%',
+          maxWidth: 420,
+          padding: '36px 32px',
+          borderRadius: 'var(--radius-xl)',
+        }}
+      >
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 28,
+              marginBottom: 14,
+              boxShadow: '0 8px 24px rgba(99,102,241,0.35)',
+            }}
+          >
+            📝
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 4 }}>邀请注册</h1>
+          <p style={{ fontSize: 14, color: 'var(--text-secondary)' }}>加入团队，开始协作</p>
         </div>
-      )}
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <input placeholder="姓名" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
-        <input
-          type="password"
-          placeholder="密码（至少8位）"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={8}
-          style={inputStyle}
-        />
-        {error && <div style={{ color: '#dc2626', fontSize: 14 }}>{error}</div>}
-        <button type="submit" disabled={loading || !inviteInfo} style={{ ...buttonStyle, opacity: loading ? 0.6 : 1 }}>
-          {loading ? '注册中...' : '注册并登录'}
-        </button>
-      </form>
-      <div style={{ marginTop: 16, fontSize: 14, color: '#52606d' }}>
-        已有账号？<Link to="/login">去登录</Link>
+
+        {inviteInfo && (
+          <div
+            style={{
+              background: 'rgba(99,102,241,0.08)',
+              border: '1px solid rgba(99,102,241,0.15)',
+              borderRadius: 12,
+              padding: '14px 16px',
+              marginBottom: 18,
+              fontSize: 14,
+            }}
+          >
+            <div style={{ marginBottom: 4 }}>
+              🎉 你被邀请加入 <strong style={{ color: 'var(--primary-dark)' }}>{inviteInfo.workspaceName}</strong>
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+              注册邮箱：<strong style={{ color: 'var(--text)' }}>{inviteInfo.email}</strong>
+            </div>
+          </div>
+        )}
+
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+              姓名
+            </label>
+            <input placeholder="你的名字" value={name} onChange={(e) => setName(e.target.value)} required className="input-glass" />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6, display: 'block' }}>
+              密码
+            </label>
+            <input
+              type="password"
+              placeholder="至少 8 位"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              className="input-glass"
+            />
+          </div>
+          {error && (
+            <div
+              style={{
+                color: '#dc2626',
+                fontSize: 13,
+                background: 'rgba(220,38,38,0.08)',
+                padding: '10px 12px',
+                borderRadius: 8,
+              }}
+            >
+              {error}
+            </div>
+          )}
+          <button
+            type="submit"
+            disabled={loading || !inviteInfo}
+            className="btn-primary"
+            style={{ marginTop: 4, opacity: loading || !inviteInfo ? 0.6 : 1 }}
+          >
+            {loading ? '注册中...' : '注册并登录'}
+          </button>
+        </form>
+        <div style={{ marginTop: 20, fontSize: 14, color: 'var(--text-secondary)', textAlign: 'center' }}>
+          已有账号？<Link to="/login" style={{ fontWeight: 600 }}>去登录</Link>
+        </div>
       </div>
     </div>
   )

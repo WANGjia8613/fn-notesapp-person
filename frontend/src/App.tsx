@@ -37,37 +37,94 @@ function Layout({ user, logout, children }: { user: User; logout: () => void; ch
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <header
+        className="glass-nav"
         style={{
-          background: '#fff',
-          borderBottom: '1px solid #e4e7eb',
-          padding: '10px 20px',
+          padding: '12px 28px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
         }}
       >
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <strong style={{ fontSize: 16 }}>📝 笔记</strong>
-          <Link to="/" style={{ color: '#52606d' }}>笔记列表</Link>
-          <Link to="/new" style={{ color: '#52606d' }}>新建笔记</Link>
-          <Link to="/settings" style={{ color: '#52606d' }}>提醒设置</Link>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 9,
+              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: 16,
+              marginRight: 8,
+              boxShadow: '0 2px 8px rgba(99,102,241,0.3)',
+            }}
+          >
+            📝
+          </div>
+          <strong style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em', marginRight: 16 }}>
+            笔记
+          </strong>
+          <Link to="/" className="nav-link">笔记列表</Link>
+          <Link to="/new" className="nav-link">新建笔记</Link>
+          <Link to="/settings" className="nav-link">提醒设置</Link>
           {['owner', 'admin'].includes(user.role) && (
-            <Link to="/team" style={{ color: '#52606d' }}>团队与邀请</Link>
+            <Link to="/team" className="nav-link">团队与邀请</Link>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 14 }}>
-          <span style={{ color: '#52606d' }}>
-            {user.name}（{user.role}）
-          </span>
-          <button
-            onClick={logout}
-            style={{ padding: '4px 12px', border: '1px solid #d0d7de', borderRadius: 6, background: '#fff' }}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 14 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'rgba(99,102,241,0.08)',
+              padding: '5px 12px',
+              borderRadius: 20,
+            }}
           >
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+            >
+              {user.name?.charAt(0) || 'U'}
+            </div>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+              {user.name}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                background: 'rgba(99,102,241,0.15)',
+                color: '#4f46e5',
+                padding: '1px 8px',
+                borderRadius: 10,
+                fontWeight: 600,
+              }}
+            >
+              {user.role}
+            </span>
+          </div>
+          <button onClick={logout} className="btn-secondary btn-sm">
             退出
           </button>
         </div>
       </header>
-      <main style={{ flex: 1, padding: 20 }}>{children}</main>
+      <main style={{ flex: 1, padding: '28px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>{children}</main>
     </div>
   )
 }

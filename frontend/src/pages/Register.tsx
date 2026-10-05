@@ -86,10 +86,11 @@ export default function Register({ onSuccess }: { onSuccess: (token: string, use
         <input placeholder="姓名" value={name} onChange={(e) => setName(e.target.value)} required style={inputStyle} />
         <input
           type="password"
-          placeholder="密码（至少6位）"
+          placeholder="密码（至少8位）"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          minLength={8}
           style={inputStyle}
         />
         {error && <div style={{ color: '#dc2626', fontSize: 14 }}>{error}</div>}

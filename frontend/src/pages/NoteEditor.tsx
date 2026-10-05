@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import mermaid from 'mermaid'
-import { notesApi, attachmentApi } from '../api'
+import { notesApi, workspaceApi, authApi, attachmentApi } from '../api'
 import NoteSidebar from '../components/NoteSidebar'
 
 const tabBtn: React.CSSProperties = {
@@ -71,11 +71,20 @@ export default function NoteEditor() {
   const [dueAt, setDueAt] = useState('')
   const [remindAt, setRemindAt] = useState('')
   const [isPrivate, setIsPrivate] = useState(false)
+  const [memberIds, setMemberIds] = useState<string[]>([])
+  const [candidates, setCandidates] = useState<{ id: string; name: string; email?: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 团队成员列表（用于私有笔记的共享选择，排除自己）
+  useEffect(() => {
+    Promise.all([workspaceApi.members(), authApi.me()])
+      .then(([members, me]) => setCandidates(members.filter((m) => m.id !== me.id)))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (id) {
@@ -88,6 +97,7 @@ export default function NoteEditor() {
           setDueAt(note.dueAt ? note.dueAt.slice(0, 16) : '')
           setRemindAt(note.remindAt ? note.remindAt.slice(0, 16) : '')
           setIsPrivate(note.isPrivate)
+          setMemberIds((note.members ?? []).map((m) => m.userId))
         })
         .catch((e) => setError(e.message))
     }
@@ -108,6 +118,7 @@ export default function NoteEditor() {
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
         remindAt: remindAt ? new Date(remindAt).toISOString() : null,
         isPrivate,
+        memberIds: isPrivate ? memberIds : [],
       }
       const saved = isNew ? await notesApi.create(payload) : await notesApi.update(id!, payload)
       if (isNew) {
@@ -254,6 +265,9 @@ export default function NoteEditor() {
         setRemindAt={setRemindAt}
         isPrivate={isPrivate}
         setIsPrivate={setIsPrivate}
+        memberIds={memberIds}
+        setMemberIds={setMemberIds}
+        candidates={candidates}
       />
     </div>
   )

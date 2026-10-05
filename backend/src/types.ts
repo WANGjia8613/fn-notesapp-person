@@ -18,3 +18,6 @@ declare module 'fastify' {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>
   }
 }
+
+// 路由级限流配置由 @fastify/rate-limit 自身声明的 FastifyContextConfig.rateLimit 提供，
+// 这里不再重复声明（重复声明会导致 TS2717 类型冲突）

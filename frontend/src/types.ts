@@ -7,6 +7,11 @@ export interface User {
   workspaceName?: string
 }
 
+export interface NoteMemberRef {
+  userId: string
+  user?: { id: string; name: string; email?: string }
+}
+
 export interface Note {
   id: string
   title: string
@@ -15,9 +20,11 @@ export interface Note {
   dueAt: string | null
   remindAt: string | null
   isPrivate: boolean
+  authorId?: string
   createdAt: string
   updatedAt: string
   author?: { name: string; email?: string }
+  members?: NoteMemberRef[]
 }
 
 export interface Invitation {

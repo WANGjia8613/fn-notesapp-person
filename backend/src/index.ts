@@ -1,12 +1,30 @@
 import { buildApp } from './app.js'
+import { prisma } from './prisma.js'
+import { config } from './config.js'
 
-const port = Number(process.env.PORT) || 3000
+const port = config.port
 
 async function main() {
   const app = buildApp()
+
+  const shutdown = async (signal: string) => {
+    app.log.info(`收到 ${signal}，正在优雅退出...`)
+    try {
+      await app.close()
+      await prisma.$disconnect()
+    } catch (err) {
+      app.log.error(err)
+    } finally {
+      process.exit(0)
+    }
+  }
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'))
+  process.on('SIGINT', () => void shutdown('SIGINT'))
+
   try {
     await app.listen({ port, host: '0.0.0.0' })
-    app.log.info(`Server running on http://0.0.0.0:${port}`)
+    app.log.info(`Server running on http://0.0.0.0:${port} (TZ=${config.timeZone})`)
   } catch (err) {
     app.log.error(err)
     process.exit(1)

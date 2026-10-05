@@ -37,6 +37,8 @@ export async function sendWebhook(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      // 超时保护：避免第三方 webhook 无响应时卡住提醒引擎的扫描循环
+      signal: AbortSignal.timeout(10000),
     })
     if (!res.ok) {
       const text = await res.text().catch(() => '')

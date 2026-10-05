@@ -31,6 +31,7 @@ model User {
   createdAt    DateTime  @default(now())
   notes        Note[]
   attachments  Attachment[]
+  noteShares   NoteMember[]
 
   @@unique([workspaceId, email])
   @@index([workspaceId])
@@ -52,9 +53,22 @@ model Note {
   updatedAt   DateTime  @updatedAt
   reminders   Reminder[]
   attachments Attachment[]
+  members     NoteMember[]
 
   @@index([workspaceId])
   @@index([dueAt])
+}
+
+/// 私有笔记的共享成员（公开笔记不需要该表记录）
+model NoteMember {
+  noteId    String
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([noteId, userId])
+  @@index([userId])
 }
 
 model Invitation {
@@ -115,6 +129,10 @@ model SendLog {
 
   @@index([reminderId])
   @@index([summaryKey])
+
+  // 幂等：同一个提醒 / 同一个汇总周期只允许一条 "sent" 记录
+  @@unique([reminderId, status])
+  @@unique([summaryKey, status])
 }
 
 model WebhookConfig {
@@ -150,5 +168,3 @@ model Attachment {
   @@index([noteId])
 }
 
-// ========== M3 附件（后续添加） ==========
-// model Attachment { ... }

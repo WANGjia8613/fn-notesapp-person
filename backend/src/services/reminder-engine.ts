@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js'
 import { sendMail } from './mail.js'
 import { runSummaries } from './summary-service.js'
 import { sendUserWebhooks } from './webhook.js'
+import { escapeHtml, escapeTags } from '../utils/html.js'
 
 let running = false
 
@@ -32,16 +33,17 @@ async function syncNoteReminders() {
     if (existing) continue
 
     const dueStr = note.dueAt ? new Date(note.dueAt).toLocaleString('zh-CN') : '未设置'
+    // 标题/作者/标签均来自用户输入，插入 HTML 前必须转义
     const subject = `⏰ 提醒：《${note.title}》已到提醒时间`
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1f2933;">
         <h2>笔记到期提醒</h2>
         <p>你有一篇笔记到了提醒时间：</p>
         <div style="background:#f0f7ff;border-left:4px solid #2563eb;padding:12px 16px;margin:12px 0;">
-          <h3 style="margin:0 0 8px;">${note.title}</h3>
-          <p style="margin:4px 0;color:#52606d;">作者：${note.author.name}</p>
-          <p style="margin:4px 0;color:#52606d;">到期时间：${dueStr}</p>
-          ${note.tags.length ? `<p style="margin:4px 0;color:#52606d;">标签：${note.tags.map((t) => '#' + t).join(' ')}</p>` : ''}
+          <h3 style="margin:0 0 8px;">${escapeHtml(note.title)}</h3>
+          <p style="margin:4px 0;color:#52606d;">作者：${escapeHtml(note.author.name)}</p>
+          <p style="margin:4px 0;color:#52606d;">到期时间：${escapeHtml(dueStr)}</p>
+          ${note.tags.length ? `<p style="margin:4px 0;color:#52606d;">标签：${escapeTags(note.tags)}</p>` : ''}
         </div>
         <p style="color:#9aa5b1;font-size:12px;">此邮件由笔记系统自动发送，请勿直接回复。</p>
       </div>

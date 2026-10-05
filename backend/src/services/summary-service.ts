@@ -1,9 +1,15 @@
 import { prisma } from '../prisma.js'
 import { sendMail } from './mail.js'
 import { sendUserWebhooks } from './webhook.js'
+import { escapeHtml, escapeTags } from '../utils/html.js'
+import { noteVisibilityWhere } from '../utils/note-access.js'
 
+/** 本地时区的 YYYY-MM-DD（不能用 toISOString，否则会被 UTC 偏移带偏一天） */
 function dateKey(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 /**
@@ -30,8 +36,8 @@ function noteRow(n: NoteRow): string {
   return `
     <tr>
       <td style="padding:6px 10px;border-bottom:1px solid #e4e7eb;">
-        <strong>${n.title}</strong>
-        ${n.tags.length ? `<span style="color:#9aa5b1;font-size:12px;margin-left:6px;">${n.tags.map((t) => '#' + t).join(' ')}</span>` : ''}
+        <strong>${escapeHtml(n.title)}</strong>
+        ${n.tags.length ? `<span style="color:#9aa5b1;font-size:12px;margin-left:6px;">${escapeTags(n.tags)}</span>` : ''}
       </td>
       <td style="padding:6px 10px;border-bottom:1px solid #e4e7eb;color:#52606d;white-space:nowrap;">
         ${n.dueAt ? new Date(n.dueAt).toLocaleDateString('zh-CN') : '-'}
@@ -58,8 +64,12 @@ async function buildSummary(userId: string, frequency: string): Promise<{ subjec
   const weekEnd = new Date(todayStart.getTime() + 7 * 86400000)
   const weekAgo = new Date(now.getTime() - 7 * 86400000)
 
-  // 可见范围：公开笔记 + 自己的私有笔记
-  const visible = { OR: [{ isPrivate: false }, { authorId: userId }] }
+  // 可见范围：公开笔记 + 自己的私有笔记 + 别人共享给我的私有笔记
+  const visible = noteVisibilityWhere({
+    userId,
+    workspaceId: user.workspaceId,
+    role: user.role,
+  })
 
   const dueToday = await prisma.note.findMany({
     where: { workspaceId: user.workspaceId, dueAt: { gte: todayStart, lt: todayEnd }, ...visible },
@@ -83,7 +93,7 @@ async function buildSummary(userId: string, frequency: string): Promise<{ subjec
   const html = `
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;color:#1f2933;">
       <h2 style="margin-bottom:4px;">${periodLabel}笔记汇总</h2>
-      <p style="color:#9aa5b1;margin-top:0;">${dateKey(now)} · ${user.name}</p>
+      <p style="color:#9aa5b1;margin-top:0;">${escapeHtml(dateKey(now))} · ${escapeHtml(user.name)}</p>
 
       <h3 style="color:#dc2626;margin-top:24px;">⚠️ 今日到期（${dueToday.length}）</h3>
       ${noteTable(dueToday)}

@@ -1,5 +1,11 @@
 import { useState } from 'react'
 
+interface Member {
+  id: string
+  name: string
+  email?: string
+}
+
 interface Props {
   tags: string[]
   setTags: (t: string[]) => void
@@ -9,6 +15,11 @@ interface Props {
   setRemindAt: (v: string) => void
   isPrivate: boolean
   setIsPrivate: (v: boolean) => void
+  /** 共享成员（仅私有笔记有效） */
+  memberIds: string[]
+  setMemberIds: (v: string[]) => void
+  /** 团队内可选成员（已排除自己） */
+  candidates: Member[]
 }
 
 const fieldStyle: React.CSSProperties = {
@@ -28,6 +39,9 @@ export default function NoteSidebar({
   setRemindAt,
   isPrivate,
   setIsPrivate,
+  memberIds,
+  setMemberIds,
+  candidates,
 }: Props) {
   const [tagInput, setTagInput] = useState('')
 
@@ -35,6 +49,10 @@ export default function NoteSidebar({
     const t = tagInput.trim()
     if (t && !tags.includes(t)) setTags([...tags, t])
     setTagInput('')
+  }
+
+  const toggleMember = (id: string) => {
+    setMemberIds(memberIds.includes(id) ? memberIds.filter((x) => x !== id) : [...memberIds, id])
   }
 
   return (
@@ -54,7 +72,7 @@ export default function NoteSidebar({
       <div style={{ marginBottom: 16 }}>
         <label style={{ fontSize: 13, color: '#52606d', display: 'block', marginBottom: 4 }}>到期时间</label>
         <input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} style={fieldStyle} />
-        <div style={{ fontSize: 12, color: '#9aa5b1', marginTop: 4 }}>M2 提醒引擎会据此自动发邮件</div>
+        <div style={{ fontSize: 12, color: '#9aa5b1', marginTop: 4 }}>提醒引擎会据此自动发邮件</div>
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -116,8 +134,43 @@ export default function NoteSidebar({
           <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
           设为私有笔记
         </label>
-        <div style={{ fontSize: 12, color: '#9aa5b1', marginTop: 4, marginLeft: 24 }}>仅自己可见（owner 除外）</div>
+        <div style={{ fontSize: 12, color: '#9aa5b1', marginTop: 4, marginLeft: 24 }}>
+          仅自己与下方选中的成员可见（owner 除外）
+        </div>
       </div>
+
+      {isPrivate && (
+        <div
+          style={{
+            marginTop: 10,
+            paddingTop: 12,
+            borderTop: '1px dashed #e4e7eb',
+          }}
+        >
+          <label style={{ fontSize: 13, color: '#52606d', display: 'block', marginBottom: 6 }}>
+            共享给（{memberIds.length}）
+          </label>
+          {candidates.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#9aa5b1' }}>团队里还没有其他成员</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {candidates.map((m) => (
+                <label
+                  key={m.id}
+                  style={{ fontSize: 13, color: '#37474f', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={memberIds.includes(m.id)}
+                    onChange={() => toggleMember(m.id)}
+                  />
+                  {m.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   )
 }

@@ -1,6 +1,8 @@
 # 自研笔记软件（Markdown + 自动提醒）
 
 > 参考 AFFiNE 设计理念，从零自研，部署在飞牛 NAS，主打「Markdown 笔记 + 时间/提醒驱动的自动化推送」。
+>
+> 📖 **完整的安装、配置、备份恢复、升级与排错说明见 [部署指南](docs/部署指南.md)。**
 
 ## 特性
 
@@ -21,6 +23,8 @@
 | 邮件 | nodemailer + SMTP |
 
 ## 快速开始（飞牛 NAS / 任意 Docker 环境）
+
+> 这里是最短路径；细节（配置项、备份恢复、外网访问、常见问题、卸载）请看 [docs/部署指南.md](docs/部署指南.md)。
 
 ### 1. 准备环境变量
 
@@ -127,6 +131,7 @@ curl -s -X DELETE http://127.0.0.1:8080/api/invitations/<id> -H "Authorization: 
 │   └── src/utils/       # 权限判定 / HTML 转义等公共逻辑
 ├── nginx/               # 反向代理配置
 ├── scripts/             # gen-env.sh（生成配置）、backup.sh（备份）
+├── docs/                # 部署指南
 ├── docker-compose.yml   # 一键编排
 ├── 设计文档.md           # 完整设计文档
 └── README.md

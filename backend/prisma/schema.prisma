@@ -50,6 +50,21 @@ model Note {
   author      User      @relation(fields: [authorId], references: [id])
   title       String
   bodyMd      String    @default("")
+  // ===== 富文本正文（Markdown 与富文本双格式共存）=====
+  // 正文格式标记：markdown = 存量笔记，走 react-markdown + Mermaid 渲染路径（原样保留）；
+  // html = 新笔记，走 TipTap 富文本路径。前端按本字段分派渲染器。
+  // 存量行的默认值 'markdown' 恰好就是它们的正确语义，因此无需回填。
+  bodyFormat  String    @default("markdown")
+  // ProseMirror JSON，富文本笔记的**编辑真源**。只有 bodyFormat='html' 时非空。
+  // 不只存 HTML 的原因：HTML 无法表达列表层级/标题层级，所见即所得编辑器重开后会丢结构。
+  bodyJson    String    @default("")
+  // 由 bodyJson 同步派生的 HTML 冗余投影，供搜索 / iCal DESCRIPTION / 未来导出与邮件使用。
+  // 不作为渲染真源，允许随时从 bodyJson 重新生成。
+  bodyHtml    String    @default("")
+  // bodyHtml（markdown 笔记则为 bodyMd）的纯文本投影，**仅用于搜索**。
+  // 直接对 HTML 做 ILIKE 会被标签打断：搜中文因标签插入而失效，搜 div/span 会命中每一篇。
+  // 由后端从正文派生，不接受前端传入（防投毒）。走 GIN trigram 索引。
+  bodyText    String    @default("")
   tags        String[]  @default([])
   dueAt       DateTime? // 到期时间（侧边栏字段）
   remindAt    DateTime? // 提醒时间（侧边栏字段，M2 生效）
@@ -178,6 +193,10 @@ model Attachment {
   mimeType     String
   size         Int
   storagePath  String    // 本地存储相对路径
+  // 附件下载签名凭证（256bit 随机 hex）。存在的原因是浏览器 <img> 标签发不出
+  // Authorization 头，而下载路由是强制 JWT 鉴权的，正文里的图片必须能匿名加载。
+  // 走 ?t= 旁路时响应带 no-referrer，避免凭证经 Referer 外泄。
+  shareToken   String    @unique @default(uuid())
   createdAt    DateTime  @default(now())
 
   @@index([workspaceId])

@@ -132,5 +132,15 @@ export const attachmentApi = {
     const q = noteId ? `?noteId=${noteId}` : ''
     return api<Attachment[]>(`/attachments${q}`)
   },
+  /**
+   * 把「笔记创建前上传」的附件补挂到笔记上。
+   * 新建笔记时 noteId 还不存在，附件先以 noteId=null 上传，
+   * 笔记创建成功后由编辑器回调本方法补绑（顺带修复既有游离附件缺陷）。
+   */
+  bindToNote: (attachmentId: string, noteId: string) =>
+    api<{ success: boolean }>(`/attachments/${attachmentId}/note`, {
+      method: 'PUT',
+      body: JSON.stringify({ noteId }),
+    }),
   remove: (id: string) => api<{ success: boolean }>(`/attachments/${id}`, { method: 'DELETE' }),
 }

@@ -16,7 +16,16 @@ export interface NoteMemberRef {
 export interface Note {
   id: string
   title: string
+  /** 存量 Markdown 正文。bodyFormat='html' 时后端强制为 '' */
   bodyMd?: string
+  /** 正文格式：markdown 走 react-markdown + Mermaid；html 走 TipTap 富文本 */
+  bodyFormat?: 'markdown' | 'html'
+  /** ProseMirror JSON，富文本笔记的编辑真源 */
+  bodyJson?: string
+  /** 由 bodyJson 派生的 HTML 冗余投影，渲染不依赖它（以 JSON 为准） */
+  bodyHtml?: string
+  /** 纯文本投影，后端派生。列表/搜索场景不需要，详情接口会带 */
+  bodyText?: string
   tags: string[]
   dueAt: string | null
   remindAt: string | null
@@ -70,6 +79,8 @@ export interface Attachment {
   mimeType: string
   size: number
   storagePath: string
+  /** 图片签名 URL 用：拼成 /api/attachments/{id}/download?t={shareToken} 直接给 <img> */
+  shareToken: string
   createdAt: string
   uploadedBy?: { name: string }
 }

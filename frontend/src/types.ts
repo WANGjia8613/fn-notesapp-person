@@ -5,6 +5,7 @@ export interface User {
   role: string
   workspaceId: string
   workspaceName?: string
+  createdAt?: string
 }
 
 export interface NoteMemberRef {

@@ -9,6 +9,24 @@ const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   }
 }
 
+/**
+ * 拼出可对外分发的绝对地址。
+ * 后端挂在 Nginx 反代（可能再套 Cloudflare Tunnel）后面，
+ * 因此优先用 X-Forwarded-Proto / X-Forwarded-Host，否则退回 Host。
+ */
+function absoluteUrl(request: FastifyRequest, path: string): string {
+  const first = (v: unknown) =>
+    (Array.isArray(v) ? v[0] : v)?.toString().split(',')[0].trim() || ''
+  const proto = first(request.headers['x-forwarded-proto']) || request.protocol
+  const host =
+    first(request.headers['x-forwarded-host']) || first(request.headers['host']) || request.hostname
+  return `${proto}://${host}${path}`
+}
+
+function inviteLinkOf(request: FastifyRequest, token: string): string {
+  return absoluteUrl(request, `/register?token=${token}`)
+}
+
 export const invitationRoutes: FastifyPluginAsync = async (app) => {
   // 公开：验证邀请 token（注册页用）—— 限流防止 token 暴力枚举
   app.get(
@@ -46,16 +64,23 @@ export const invitationRoutes: FastifyPluginAsync = async (app) => {
     const invitation = await prisma.invitation.create({
       data: { workspaceId, email, token, expiresAt },
     })
-    return { ...invitation, inviteLink: `/register?token=${token}` }
+    return { ...invitation, inviteLink: inviteLinkOf(request, token) }
   })
 
-  // 列出邀请（owner/admin）
+  // 列出邀请（owner/admin）—— 待使用的邀请同时给出可直接复制的完整链接
   app.get('/', { preHandler: [app.authenticate, requireAdmin] }, async (request) => {
     const { workspaceId } = request.user
-    return prisma.invitation.findMany({
+    const invitations = await prisma.invitation.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
     })
+    const now = new Date()
+    return invitations.map((inv) => ({
+      ...inv,
+      // 已过期但状态还是 pending 的，顺手纠正一下展示
+      status: inv.status === 'pending' && inv.expiresAt < now ? 'expired' : inv.status,
+      inviteLink: inv.status === 'pending' ? inviteLinkOf(request, inv.token) : undefined,
+    }))
   })
 
   // 撤销邀请（owner/admin）

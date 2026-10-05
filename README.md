@@ -6,7 +6,7 @@
 
 - **Markdown 优先**：纯 Markdown 正文，侧边栏独立设置到期/提醒字段，不污染正文
 - **小团队多人**：团队空间 + 角色（owner/admin/member）+ 笔记私有/共享（私有笔记可指定共享成员）
-- **邀请制注册**：默认不开放公开注册，管理员邀请成员加入
+- **邀请制注册**：默认不开放公开注册，管理员在「团队与邀请」页面生成邀请链接发给成员
 - **自动提醒**：到期提醒、每日/每周汇总、iCal 日历，SMTP 邮件 + Webhook（飞书/钉钉/企业微信）
 - **数据自控**：全部跑在飞牛 NAS，数据落本地硬盘，不依赖第三方云
 
@@ -60,6 +60,36 @@ docker compose exec backend npm run seed
 > 飞牛 NAS 的 80/443 通常被系统门户占用，因此默认用 **8080**。
 > 需要远程访问时建议套 Cloudflare Tunnel，指向 `http://localhost:8080`，不要在宿主机直接暴露数据库/后端端口。
 
+## 邀请成员
+
+登录管理员/超管账号后，顶栏进入 **「团队与邀请」** 页面：
+
+1. 填被邀请人邮箱 + 选有效期（1/3/7/30 天）→ 点「生成邀请链接」
+2. 复制链接发给对方（局域网 http 访问下已内置非安全上下文的复制降级方案）
+3. 对方打开链接 → 在注册页设置姓名和密码（至少 8 位）→ 自动加入团队成为 member
+4. 页面下方可查看邀请记录（待使用/已使用/已过期）并随时撤销未使用的邀请，以及查看全部团队成员
+
+> 只有 `owner` / `admin` 能看到该入口；普通成员即使直接访问 `/team` 也只会看到无权提示。
+
+也可以直接调 API（脚本化时用）：
+
+```bash
+# 登录拿 token
+TOKEN=*** -s -X POST http://127.0.0.1:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"你的密码"}' \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+
+# 生成邀请（返回里 inviteLink 是完整可发的绝对链接）
+curl -s -X POST http://127.0.0.1:8080/api/invitations \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"email":"someone@example.com","expiresInDays":7}'
+
+# 查看 / 撤销
+curl -s http://127.0.0.1:8080/api/invitations -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://127.0.0.1:8080/api/invitations/<id> -H "Authorization: Bearer $TOKEN"
+```
+
 ## 安全说明（重要）
 
 - **端口暴露最小化**：只有 `nginx` 映射到宿主机；`postgres(5432)` 与 `backend(3000)` 仅在 compose 内部网络可达，不对外暴露。
@@ -75,9 +105,11 @@ docker compose exec backend npm run seed
 
 ```
 ├── frontend/            # React + Vite 前端
+│   ├── src/pages/       # 登录 / 笔记列表 / 编辑 / 提醒设置 / 团队与邀请
+│   └── src/components/  # 编辑器侧边栏等
 ├── backend/             # Fastify + Prisma 后端
 │   ├── prisma/          # 数据模型 schema + migrations + seed
-│   └── src/routes/      # API 路由
+│   ├── src/routes/      # API 路由
 │   └── src/utils/       # 权限判定 / HTML 转义等公共逻辑
 ├── nginx/               # 反向代理配置
 ├── scripts/             # gen-env.sh（生成配置）、backup.sh（备份）
@@ -106,6 +138,7 @@ docker compose exec backend npx prisma migrate deploy
 | **M2 提醒引擎** | 定时扫描 + SMTP 邮件 + 每日/每周汇总 + 提醒规则 UI | ✅ |
 | **M3 打磨** | Mermaid + 全文搜索 + iCal 订阅 + Webhook + 附件上传 + 备份 | ✅ |
 | **M4 加固** | 端口收敛 / 密钥 fail-fast / 限流 / 私有笔记共享 / 邮件转义 / 时区 / migration | ✅ |
+| **M5 团队管理** | 「团队与邀请」页面：邀请链接生成与复制、邀请记录与撤销、成员列表 | ✅ |
 
 ## 备份
 

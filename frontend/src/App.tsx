@@ -7,6 +7,7 @@ import Register from './pages/Register'
 import NotesList from './pages/NotesList'
 import NoteEditor from './pages/NoteEditor'
 import ReminderSettings from './pages/ReminderSettings'
+import Team from './pages/Team'
 
 function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -50,6 +51,9 @@ function Layout({ user, logout, children }: { user: User; logout: () => void; ch
           <Link to="/" style={{ color: '#52606d' }}>笔记列表</Link>
           <Link to="/new" style={{ color: '#52606d' }}>新建笔记</Link>
           <Link to="/settings" style={{ color: '#52606d' }}>提醒设置</Link>
+          {['owner', 'admin'].includes(user.role) && (
+            <Link to="/team" style={{ color: '#52606d' }}>团队与邀请</Link>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 14 }}>
           <span style={{ color: '#52606d' }}>
@@ -128,6 +132,18 @@ export default function App() {
           user ? (
             <Layout user={user} logout={logout}>
               <ReminderSettings />
+            </Layout>
+          ) : (
+            <Navigate to="/login" />
+          )
+        }
+      />
+      <Route
+        path="/team"
+        element={
+          user ? (
+            <Layout user={user} logout={logout}>
+              <Team user={user} />
             </Layout>
           ) : (
             <Navigate to="/login" />

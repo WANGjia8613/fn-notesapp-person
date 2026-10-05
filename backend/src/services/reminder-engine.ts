@@ -261,7 +261,17 @@ async function tick() {
     await triggerDueReminders()
     await runSummaries()
   } catch (err) {
-    console.error('[reminder-engine] tick error:', err)
+    // 引擎在容器启动瞬间就会跑一次，而首次部署时 migrate 往往是紧接着才执行的。
+    // 表还没建时 Prisma 会抛 P2021/P2022，原来会把整段调用栈打到日志里，
+    // 看着像故障其实只是启动顺序问题 —— 这里给一条可操作的提示。
+    const code = (err as { code?: string })?.code
+    if (code === 'P2021' || code === 'P2022') {
+      console.error(
+        '[reminder-engine] 跳过本次扫描：数据表尚未创建。首次部署请先执行：docker compose exec -T backend npx prisma migrate deploy',
+      )
+    } else {
+      console.error('[reminder-engine] tick error:', err)
+    }
   } finally {
     running = false
   }

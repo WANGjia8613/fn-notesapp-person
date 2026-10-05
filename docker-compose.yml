@@ -45,6 +45,12 @@ services:
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
       UPLOAD_DIR: /app/uploads
+      # seed 用：不传进来时 `npm run seed` 只能拿到脚本里的默认值，
+      # 导致 .env 里配置的 SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD 形同虚设
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-}
+      SEED_WORKSPACE_NAME: ${SEED_WORKSPACE_NAME:-}
     expose:
       - "3000"
     depends_on:

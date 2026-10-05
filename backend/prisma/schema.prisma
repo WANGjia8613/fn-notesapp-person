@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== M1 核心表 ==========
+
+model Workspace {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  users       User[]
+  notes       Note[]
+  invitations Invitation[]
+  reminders   Reminder[]
+  attachments Attachment[]
+}
+
+model User {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  name         String
+  role         String    @default("member") // owner / admin / member
+  createdAt    DateTime  @default(now())
+  notes        Note[]
+  attachments  Attachment[]
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId])
+}
+
+model Note {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id])
+  title       String
+  bodyMd      String    @default("")
+  tags        String[]  @default([])
+  dueAt       DateTime? // 到期时间（侧边栏字段）
+  remindAt    DateTime? // 提醒时间（侧边栏字段，M2 生效）
+  isPrivate   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  reminders   Reminder[]
+  attachments Attachment[]
+
+  @@index([workspaceId])
+  @@index([dueAt])
+}
+
+model Invitation {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String?
+  token       String    @unique
+  expiresAt   DateTime
+  usedBy      String?
+  status      String    @default("pending") // pending / used / expired
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+// ========== M2 提醒相关表 ==========
+
+model Reminder {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  noteId      String?
+  note        Note?     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId      String?   // 接收者用户 ID
+  type        String    // "due"（到期提醒） / "summary"（汇总推送）
+  title       String
+  body        String
+  triggerAt   DateTime  // 计划触发时间
+  channel     String    @default("email") // email / webhook
+  status      String    @default("pending") // pending / sent / failed
+  createdAt   DateTime  @default(now())
+  sentAt      DateTime?
+
+  @@index([workspaceId])
+  @@index([status, triggerAt])
+}
+
+model SummaryConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  frequency String   // "daily" / "weekly"
+  time      String   // "09:00"（24小时制）
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, frequency])
+}
+
+model SendLog {
+  id         String    @id @default(cuid())
+  reminderId String?
+  summaryKey String?   // 汇总幂等键，如 "daily:2026-10-05:user123"
+  sentAt     DateTime  @default(now())
+  status     String    // "sent" / "failed"
+  detail     String?
+
+  @@index([reminderId])
+  @@index([summaryKey])
+}
+
+model WebhookConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // 备注名，如"飞书群机器人"
+  url       String
+  type      String   @default("feishu") // feishu / dingtalk / wecom / generic
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ========== M3 附件 ==========
+
+model Attachment {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  noteId       String?
+  note         Note?     @relation(fields: [noteId], references: [id], onDelete: SetNull)
+  uploadedById String
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+  filename     String
+  mimeType     String
+  size         Int
+  storagePath  String    // 本地存储相对路径
+  createdAt    DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([noteId])
+}
+
+// ========== M3 附件（后续添加） ==========
+// model Attachment { ... }

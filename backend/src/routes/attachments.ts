@@ -8,6 +8,25 @@ import { canViewNote, noteVisibilityWhere } from '../utils/note-access.js'
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
 const MAX_SIZE = 50 * 1024 * 1024 // 50MB
 
+/**
+ * 允许在浏览器里内联渲染的 MIME 白名单（仅纯图片）。
+ *
+ * 为什么需要白名单：附件的 mimeType 来自用户上传时客户端声明的值，完全可控。
+ * 原实现对所有类型一律用 `Content-Disposition: inline` + 原始 mimeType 回吐，
+ * 于是任何成员都能上传一个 text/html（或 image/svg+xml）附件，
+ * 把链接发给管理员，对方一点开就在本站源下执行任意脚本，
+ * 直接读走 localStorage 里的 JWT —— 这是一个同源存储型 XSS。
+ *
+ * `X-Content-Type-Options: nosniff` 挡不住这种情况，因为响应头本身就声明了 text/html。
+ * 现在改为：白名单外一律降级为 application/octet-stream 并强制下载。
+ */
+const INLINE_SAFE_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp'])
+
+/** 清掉文件名里可能破坏 Content-Disposition 头结构的字符 */
+function safeFilename(name: string): string {
+  return (name || 'attachment').replace(/[\r\n"\\]/g, '_').slice(0, 200)
+}
+
 export default async function attachmentRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
 
@@ -113,9 +132,17 @@ export default async function attachmentRoutes(app: FastifyInstance) {
     }
 
     const stream = createReadStream(filePath)
-    reply.header('Content-Type', att.mimeType)
+    const canInline = INLINE_SAFE_MIME.has(att.mimeType)
+    reply.header('Content-Type', canInline ? att.mimeType : 'application/octet-stream')
     reply.header('Content-Length', att.size.toString())
-    reply.header('Content-Disposition', `inline; filename="${encodeURIComponent(att.filename)}"`)
+    // 非白名单类型强制下载，绝不在本站源下渲染
+    reply.header(
+      'Content-Disposition',
+      `${canInline ? 'inline' : 'attachment'}; filename="${safeFilename(att.filename)}"; filename*=UTF-8''${encodeURIComponent(safeFilename(att.filename))}`,
+    )
+    reply.header('X-Content-Type-Options', 'nosniff')
+    // 双保险：即便将来白名单放宽，也让附件里的脚本拿不到本站凭据
+    reply.header('Content-Security-Policy', "default-src 'none'; sandbox")
     return reply.send(stream)
   })
 

@@ -46,7 +46,10 @@ body {
   background: linear-gradient(135deg, var(--bg-gradient-1) 0%, var(--bg-gradient-2) 50%, var(--bg-gradient-3) 100%);
   background-attachment: fixed;
   position: relative;
-  overflow-x: hidden;
+  /* 用 clip 而不是 hidden：overflow-x: hidden 会让 body 变成独立滚动容器，
+     导致后代（顶部导航栏、编辑器侧边栏）的 position: sticky 失效。
+     clip 同样裁掉装饰圆点的横向溢出，但不创建滚动容器，sticky 正常工作。 */
+  overflow-x: clip;
 }
 
 /* 苹果风格背景装饰：模糊彩色圆点 */
@@ -91,6 +94,19 @@ a:hover {
   color: var(--primary-dark);
 }
 
+/* 登录/注册页容器。
+   100vh 在移动端浏览器不含地址栏高度，短屏（如 768px 高的笔记本）上会把
+   表单卡片挤出视口或产生多余滚动条；100dvh 会随浏览器 UI 动态收缩。
+   写两行是为了给不支持 dvh 的老浏览器留 100vh 回退（内联样式做不到）。 */
+.auth-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
 button {
   cursor: pointer;
   font-family: inherit;
@@ -129,6 +145,24 @@ select {
 .glass-card:hover {
   box-shadow: var(--shadow-lg);
   transform: translateY(-2px);
+}
+
+/* 编辑器侧边栏。抽成类而不是内联样式，是为了让下面的窄屏 media query
+   能正常覆盖（内联样式优先级高于选择器，只能靠 !important 硬压）。 */
+.note-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  padding: 20px;
+  align-self: flex-start;
+  position: sticky;
+  top: 80px;
+}
+
+.editor-layout {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .glass-nav {
@@ -431,4 +465,89 @@ select {
 
 .animate-in {
   animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* 卡片错峰入场：只动 opacity，不动 transform。
+   因为 .glass-card:hover 用 transform 做上浮，若这里也写 transform，
+   animation 的 fill-mode: both 会把最终态一直钉住，覆盖掉 hover 效果。 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.card-stagger {
+  animation: fadeIn 0.35s ease both;
+}
+
+/* 无障碍：尊重系统「减少动态效果」设置（WCAG 2.3.3）。
+   前庭敏感/晕动症用户开启后，入场动画和 hover 位移一律关闭。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .glass-card:hover,
+  .btn-primary:hover,
+  .btn-secondary:hover {
+    transform: none;
+  }
+}
+
+/* ============================================================
+   响应式：窄屏（手机 / 分屏）布局收敛
+   只影响 <=900px，桌面端外观完全不变
+   ============================================================ */
+@media (max-width: 900px) {
+  /* 侧边栏不再固定宽度、不再吸顶，改为堆叠在编辑器下方 */
+  .note-sidebar {
+    width: 100%;
+    position: static;
+    top: auto;
+  }
+
+  .editor-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* 顶栏：允许换行，避免链接和用户信息挤成一团 */
+  .glass-nav {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 16px !important;
+  }
+
+  .nav-link {
+    font-size: 13px;
+  }
+
+  /* 主内容区收窄内边距，把宽度让给内容 */
+  main {
+    padding: 16px !important;
+  }
+
+  /* 笔记卡片网格：小屏改为单列 */
+  .notes-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 表格横向滚动已由 overflowX 处理，这里只压缩字号 */
+  .table-glass {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-page {
+    padding: 12px;
+  }
 }

@@ -12,17 +12,27 @@ function dateKey(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
+/** 错过触发时刻后的补偿窗口（分钟）。窗口内仍会补发，避免整点被跳过就永久丢失 */
+const GRACE_MINUTES = 30
+
 /**
- * 检查当前是否到达某个汇总配置的触发时刻
- * - daily: 每天到点触发
- * - weekly: 每周一到点触发
+ * 检查当前是否应当触发某个汇总配置。
+ *
+ * 修复：原实现用 getHours()/getMinutes() 精确匹配当前分钟，只要那一分钟被跳过
+ * （tick 的 running 互斥锁、上一轮 sync+发信耗时超过 1 分钟、容器重启、宿主机休眠），
+ * 当天/当周的汇总就永久丢失，且发送失败也不会重试。
+ * 现在改为「到点之后的 GRACE_MINUTES 分钟内都可触发」，实际是否发送由 SendLog
+ * 的幂等键决定，因此既不会漏发也不会重复发。
  */
 function shouldTrigger(frequency: string, time: string, now: Date): boolean {
   const [h, m] = time.split(':').map(Number)
-  if (now.getHours() !== h || now.getMinutes() !== m) return false
-  if (frequency === 'daily') return true
-  if (frequency === 'weekly') return now.getDay() === 1
-  return false
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return false
+  if (frequency === 'weekly' && now.getDay() !== 1) return false
+  if (frequency !== 'daily' && frequency !== 'weekly') return false
+
+  const scheduled = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0)
+  const diffMs = now.getTime() - scheduled.getTime()
+  return diffMs >= 0 && diffMs <= GRACE_MINUTES * 60 * 1000
 }
 
 interface NoteRow {
@@ -141,14 +151,27 @@ export async function runSummaries(now: Date = new Date()) {
       body: '你的笔记汇总已生成，详情请查看邮件。',
     }).catch(() => {})
 
-    await prisma.sendLog.create({
-      data: {
-        summaryKey: key,
-        status: result.sent ? 'sent' : 'failed',
-        detail: result.sent ? result.mode : result.error,
-      },
-    })
+    // SendLog 上有 (summaryKey, status) 唯一约束。补偿窗口内如果首次发送失败、
+    // 后续重试又失败，重复插入会抛 P2002 并中断整个 tick，这里降级为更新。
+    try {
+      await prisma.sendLog.create({
+        data: {
+          summaryKey: key,
+          status: result.sent ? 'sent' : 'failed',
+          detail: result.sent ? result.mode : result.error,
+        },
+      })
+    } catch {
+      await prisma.sendLog
+        .update({
+          where: { summaryKey_status: { summaryKey: key, status: result.sent ? 'sent' : 'failed' } },
+          data: { detail: result.sent ? result.mode : result.error, sentAt: new Date() },
+        })
+        .catch(() => {})
+    }
 
-    console.log(`[summary] ${cfg.frequency} 汇总已发送给 ${user.email} (${result.sent ? 'ok' : 'failed'})`)
+    console.log(
+      `[summary] ${cfg.frequency} 汇总${result.sent ? '已发送' : '发送失败'}给 ${user.email}${result.sent ? '' : `：${result.error}`}`,
+    )
   }
 }

@@ -104,6 +104,7 @@ export default function NotesList() {
         </div>
       ) : (
         <div
+          className="notes-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -114,7 +115,7 @@ export default function NotesList() {
             <Link
               key={note.id}
               to={`/notes/${note.id}`}
-              className="glass-card"
+              className="glass-card card-stagger"
               style={{
                 padding: 18,
                 display: 'block',

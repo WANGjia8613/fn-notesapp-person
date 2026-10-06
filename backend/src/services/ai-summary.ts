@@ -128,20 +128,34 @@ function markdownToEmailHtml(md: string): string {
 /**
  * 为单个用户生成并发送 AI 周总结。
  * 返回 true 表示成功（或已发过幂等跳过），false 表示失败。
+ *
+ * @param options.manual 手动触发（前端"立即生成"）：跳过时间窗口与本周幂等，
+ *                      日志使用独立前缀，不占用自动发送配额。
  */
-export async function runAiSummaryForUser(userId: string, now = new Date()): Promise<{ sent: boolean; reason?: string }> {
+export async function runAiSummaryForUser(
+  userId: string,
+  now = new Date(),
+  options: { manual?: boolean } = {},
+): Promise<{ sent: boolean; reason?: string }> {
+  const { manual = false } = options
   const cfg = await prisma.aiSummaryConfig.findUnique({ where: { userId } })
   if (!cfg || !cfg.enabled) return { sent: false, reason: '未启用' }
 
-  if (!shouldTrigger(cfg, now)) return { sent: false, reason: '未到触发时间' }
+  // 手动触发跳过时间窗口判断；自动触发必须落在补偿窗口内
+  if (!manual && !shouldTrigger(cfg, now)) return { sent: false, reason: '未到触发时间' }
 
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { sent: false, reason: '用户不存在' }
 
-  // 幂等：本周已发过就跳过
-  const key = `ai-weekly:${weekKey(now)}:${userId}`
-  const already = await prisma.sendLog.findFirst({ where: { summaryKey: key, status: 'sent' } })
-  if (already) return { sent: false, reason: '本周已发送' }
+  // 自动触发与手动触发使用独立的幂等命名空间，互不影响
+  const keyPrefix = manual ? 'ai-weekly-manual' : 'ai-weekly'
+  const key = `${keyPrefix}:${weekKey(now)}:${userId}`
+
+  if (!manual) {
+    // 自动触发：本周已发过就跳过
+    const already = await prisma.sendLog.findFirst({ where: { summaryKey: key, status: 'sent' } })
+    if (already) return { sent: false, reason: '本周已发送' }
+  }
 
   // 检查 workspace LLM 配置
   const llmConfig = await prisma.llmConfig.findUnique({ where: { workspaceId: user.workspaceId } })

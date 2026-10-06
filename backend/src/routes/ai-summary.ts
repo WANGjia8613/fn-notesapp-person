@@ -57,7 +57,7 @@ export default async function aiSummaryRoutes(app: FastifyInstance) {
     return cfg
   })
 
-  // 立即生成一份 AI 总结（手动测试用，不写幂等日志的 sent 状态）
+  // 立即生成一份 AI 总结（手动测试，不影响本周自动发送）
   app.post('/generate-now', async (request, reply) => {
     const userId = request.user.userId
 
@@ -67,30 +67,13 @@ export default async function aiSummaryRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: '管理员尚未配置或启用 LLM' })
     }
 
-    // 临时构造一个"现在就触发"的配置，绕过时间判断
     const userCfg = await prisma.aiSummaryConfig.findUnique({ where: { userId } })
-    if (!userCfg) {
+    if (!userCfg || !userCfg.enabled) {
       return reply.code(400).send({ error: '请先在设置中启用 AI 周总结' })
     }
 
-    // 直接调用生成逻辑，用一个未来的时间绕过 shouldTrigger
-    // 方法：临时把配置的 weekday/time 改成当前时间，生成后恢复
-    const now = new Date()
-    const original = { weekday: userCfg.weekday, time: userCfg.time }
-    await prisma.aiSummaryConfig.update({
-      where: { userId },
-      data: { weekday: now.getDay(), time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}` },
-    })
-
-    try {
-      const result = await runAiSummaryForUser(userId, now)
-      return { ok: result.sent, reason: result.reason }
-    } finally {
-      // 恢复原配置
-      await prisma.aiSummaryConfig.update({
-        where: { userId },
-        data: original,
-      }).catch(() => {})
-    }
+    // 手动模式：跳过时间窗口与自动发送幂等，日志独立记录
+    const result = await runAiSummaryForUser(userId, new Date(), { manual: true })
+    return { ok: result.sent, reason: result.reason }
   })
 }

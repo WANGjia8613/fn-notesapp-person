@@ -18,7 +18,10 @@ win:
       arch:
         - x64
   icon: build/icon.ico
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  # 产物名固定用 ASCII 前缀：productName 是中文「笔记」，若放进文件名，
+  # 上传 GitHub Release 时会被字符清理规则破坏成畸形名（曾产生 "-.-0.2.1.exe"）。
+  # 应用窗口标题与快捷方式仍显示中文，不受此设置影响。
+  artifactName: notes-desktop-${version}-${arch}.${ext}
   # 自定义签名钩子：由 SIGN_MODE 环境变量决定是否签名、用哪种证书后端。
   # 未设置 SIGN_MODE（或设为 off）时静默跳过签名，打包行为与之前完全一致。
   # 详见 build/sign.js 与 docs/代码签名指南.md
@@ -32,8 +35,8 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: 笔记
-  artifactName: ${productName}-安装程序-${version}.${ext}
+  artifactName: notes-desktop-setup-${version}.${ext}
 portable:
-  artifactName: ${productName}-绿色版-${version}.${ext}
+  artifactName: notes-desktop-portable-${version}.${ext}
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

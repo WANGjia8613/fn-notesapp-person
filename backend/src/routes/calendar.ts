@@ -112,7 +112,7 @@ const VTIMEZONE = [
   'END:VTIMEZONE',
 ].join('\r\n')
 
-function generateICS(notes: { id: string; title: string; bodyMd?: string; dueAt: Date | null }[]): string {
+function generateICS(notes: { id: string; title: string; bodyText?: string; dueAt: Date | null }[]): string {
   const now = fmtDate(new Date())
   const events = notes
     .filter((n) => n.dueAt)
@@ -126,7 +126,17 @@ function generateICS(notes: { id: string; title: string; bodyMd?: string; dueAt:
         `DTSTART:${fmtDate(start)}`,
         `DTEND:${fmtDate(end)}`,
         `SUMMARY:${escapeIcs(note.title)}`,
-        `DESCRIPTION:${escapeIcs((note.bodyMd || '').slice(0, 500))}`,
+        // 正文来源从 bodyMd 换成 bodyText：
+        //  - 富文本笔记的 bodyMd 恒为空，继续读它会让日历事件完全没有描述；
+        //  - bodyHtml 是 HTML，直接塞进 DESCRIPTION 会在日历里显示一串标签源码；
+        //  - bodyText 是后端写库时派生好的纯文本，markdown 笔记它就等于 bodyMd，行为不变。
+        //
+        // 截断 / 转义 / 折行三者的顺序不可调换：
+        //   slice(0, 500) 必须在 escapeIcs 之前 —— 否则可能把一个转义序列切成两半，
+        //     得到孤立的反斜杠，产出不合法的 ICS；
+        //   escapeIcs 处理 \ , ; 与换行（RFC 5545 要求的字面量）；
+        //   折行由文件末尾的 foldLine 统一按 UTF-8 字节处理，与本行改动互不干扰。
+        `DESCRIPTION:${escapeIcs((note.bodyText || '').slice(0, 500))}`,
         'BEGIN:VALARM',
         'TRIGGER:-PT1H',
         'ACTION:DISPLAY',
@@ -198,7 +208,7 @@ export default async function calendarRoutes(app: FastifyInstance) {
           dueAt: { not: null },
           ...noteVisibilityWhere({ userId: user.id, workspaceId: user.workspaceId, role: user.role }),
         },
-        select: { id: true, title: true, bodyMd: true, dueAt: true },
+        select: { id: true, title: true, bodyText: true, dueAt: true },
       })
 
       const ics = generateICS(notes)

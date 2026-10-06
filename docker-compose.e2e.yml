@@ -1,0 +1,61 @@
+# ============================================================
+# 端到端测试专用编排（与生产 docker-compose.yml 完全隔离）
+#
+#   docker compose -f docker-compose.e2e.yml up -d --build
+#   cd backend && E2E_BASE_URL=http://127.0.0.1:3100 npm run test:e2e
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# 说明：
+#   - 端口用 5433 / 3100，避免和生产编排（5432 内部 / 8080 对外）撞车
+#   - 库名 notes_e2e，卷名独立，down -v 可彻底清掉
+#   - backend 的 command 里先 migrate deploy + seed 再起服务，
+#     因为运行镜像的 CMD 只负责启动，不含迁移
+#   - 凭据仅用于测试，勿复制到任何真实环境
+# ============================================================
+services:
+  e2e-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: e2e
+      POSTGRES_PASSWORD: e2e_only_pass
+      POSTGRES_DB: notes_e2e
+      TZ: Asia/Shanghai
+    ports:
+      - "5433:5432"
+    volumes:
+      - e2e-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U e2e -d notes_e2e"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  e2e-api:
+    build: ./backend
+    depends_on:
+      e2e-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://e2e:e2e_only_pass@e2e-db:5432/notes_e2e
+      JWT_SECRET: e2e-only-secret-not-for-production-use-32ch
+      PORT: "3000"
+      NODE_ENV: production
+      TZ: Asia/Shanghai
+      UPLOAD_DIR: /app/uploads
+      SEED_ADMIN_EMAIL: admin@e2e.test
+      SEED_ADMIN_PASSWORD: E2E_Admin_2026!
+      SEED_ADMIN_NAME: E2E管理员
+      SEED_WORKSPACE_NAME: E2E团队
+    ports:
+      - "3100:3000"
+    volumes:
+      - e2e-uploads:/app/uploads
+    command:
+      - sh
+      - -c
+      - "npx prisma migrate deploy && node prisma/seed.mjs && node dist/index.js"
+
+volumes:
+  e2e-pgdata:
+  e2e-uploads:

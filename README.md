@@ -6,7 +6,11 @@
 
 ## 特性
 
-- **Markdown 优先**：纯 Markdown 正文，侧边栏独立设置到期/提醒字段，不污染正文
+- **双格式正文**：Markdown 与富文本（TipTap 所见即所得）共存，新建时任选，按笔记自动识别渲染器
+- **富文本编辑器**：标题 / 加粗 / 斜体 / 删除线 / 行内代码 / 有序无序列表 / 任务清单 / 引用 / 分隔线 / 链接 / 图片，全部按钮化，不需要手写语法
+- **图片即传即用**：编辑器内直接插图，自动上传为附件并写入签名 URL，无需先手动上传再引用
+- **存量笔记零改动**：升级前的 Markdown 笔记保持原样，仍走原来的渲染路径（含 Mermaid 图表）
+- **Markdown 优先**：Markdown 正文侧边栏独立设置到期/提醒字段，不污染正文
 - **小团队多人**：团队空间 + 角色（owner/admin/member）+ 笔记私有/共享（私有笔记可指定共享成员）
 - **邀请制注册**：默认不开放公开注册，管理员在「团队与邀请」页面生成邀请链接发给成员
 - **自动提醒**：到期提醒、每日/每周汇总、iCal 日历，SMTP 邮件 + Webhook（飞书/钉钉/企业微信）
@@ -16,8 +20,8 @@
 
 | 层 | 技术 |
 |---|---|
-| 前端 | React 18 + TypeScript + Vite + React Router + react-markdown + Mermaid |
-| 后端 | Node.js 20 + TypeScript + Fastify + Prisma |
+| 前端 | React 18 + TypeScript + Vite + React Router + TipTap 2（富文本）+ react-markdown + Mermaid |
+| 后端 | Node.js 20 + TypeScript + Fastify + Prisma + sanitize-html |
 | 数据库 | PostgreSQL 16 |
 | 部署 | Docker Compose + Nginx 反向代理 |
 | 邮件 | nodemailer + SMTP |
@@ -124,7 +128,7 @@ curl -s -X DELETE http://127.0.0.1:8080/api/invitations/<id> -H "Authorization: 
 ```
 ├── frontend/            # React + Vite 前端
 │   ├── src/pages/       # 登录 / 笔记列表 / 编辑 / 提醒设置 / 团队与邀请
-│   └── src/components/  # 编辑器侧边栏等
+│   └── src/components/  # 编辑器侧边栏 / MarkdownBody（存量路径）/ RichTextBody + editor/（富文本）
 ├── backend/             # Fastify + Prisma 后端
 │   ├── prisma/          # 数据模型 schema + migrations + seed
 │   ├── src/routes/      # API 路由
@@ -159,6 +163,7 @@ docker compose exec backend npx prisma migrate deploy
 | **M1 打底** | 团队空间 + 邀请制注册 + 角色登录 + Markdown 笔记 CRUD + 侧边栏到期字段 + 标签 | ✅ |
 | **M2 提醒引擎** | 定时扫描 + SMTP 邮件 + 每日/每周汇总 + 提醒规则 UI | ✅ |
 | **M3 打磨** | Mermaid + 全文搜索 + iCal 订阅 + Webhook + 附件上传 + 备份 | ✅ |
+| **M4 富文本** | TipTap 所见即所得编辑器 + Markdown/富文本双格式共存 + 附件签名 URL 插图 | ✅ |
 | **M4 加固** | 端口收敛 / 密钥 fail-fast / 限流 / 私有笔记共享 / 邮件转义 / 时区 / migration | ✅ |
 | **M5 团队管理** | 「团队与邀请」页面：邀请链接生成与复制、邀请记录与撤销、成员列表 | ✅ |
 | **M6 缺陷修复** | 附件 XSS 封堵 / 提醒引擎重写（改期同步、双时间、重试上限、共享成员）/ 汇总补偿窗口 / .env 加载 / 登录跨团队消歧 / iCal token 有效期 / ICS 行折叠与 VTIMEZONE / 前端首屏减重 / 单元测试 | ✅ |

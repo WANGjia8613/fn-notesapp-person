@@ -503,6 +503,165 @@ select {
 }
 
 /* ============================================================
+   富文本编辑器（TipTap / ProseMirror）
+   内容样式复用：编辑器根节点同时挂 .markdown-body 与 .rt-surface
+   （见 RichTextBody 的 editorProps.attributes.class），
+   所以上面那套 h1-h3/p/ul/code/pre/blockquote/hr 无需复制第二份，
+   新旧两种正文永远同款，不会出现视觉漂移。
+   .rt-surface 只承载「编辑器专属」样式，改动它不影响 Markdown 预览。
+   ============================================================ */
+.rt-root {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.6);
+  overflow: hidden;
+}
+
+.rt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.rt-group {
+  display: flex;
+  gap: 2px;
+}
+
+.rt-group + .rt-group {
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+
+/* 工具栏按钮：复用既有 .btn-secondary 的视觉语言（圆角/字号） */
+.rt-btn {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.rt-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--primary-dark);
+}
+
+.rt-btn.is-active {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.rt-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ProseMirror 容器 */
+.rt-surface {
+  min-height: 440px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 18px 20px;
+  font-size: 15px;
+  line-height: 1.75;
+  outline: none;
+}
+
+.rt-surface:focus {
+  outline: none;
+}
+
+.rt-surface > *:first-child {
+  margin-top: 0;
+}
+
+/* placeholder：取代旧路径的 `*暂无内容*` 写法。
+   选择器里的 .rt-surface 前缀不可省 —— 用裸 .tiptap p.is-editor-empty
+   会污染将来可能引入的其他 tiptap 实例。 */
+.rt-surface p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* 任务清单：TipTap 输出 <ul data-type="taskList">，
+   直接继承 .markdown-body 的 padding-left: 28px / list-style 会让勾选框错位，这里必须覆盖 */
+.rt-surface ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+  margin: 10px 0;
+}
+
+.rt-surface ul[data-type='taskList'] li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+
+.rt-surface ul[data-type='taskList'] li > label {
+  margin-top: 5px;
+  flex: 0 0 auto;
+}
+
+.rt-surface ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rt-surface ul[data-type='taskList'] input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* text-decoration 不跨块级盒子传播：设在 > div 上，其内层 <p> 会各自重置为 none，
+   所以必须直接命中承载文字的元素。两条选择器都写上以兼容有无内层 <p> 两种结构。 */
+.rt-surface ul[data-type='taskList'] li[data-checked='true'] > div,
+.rt-surface ul[data-type='taskList'] li[data-checked='true'] > div > p {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+/* 图片：限制宽度防止撑破卡片 */
+.rt-surface img,
+.rt-surface .rt-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.rt-surface img.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+}
+
+/* ProseMirror 自身的结构类 */
+.rt-surface .ProseMirror-gapcursor::after {
+  border-top-color: var(--text);
+}
+
+.rt-surface .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+/* ============================================================
    响应式：窄屏（手机 / 分屏）布局收敛
    只影响 <=900px，桌面端外观完全不变
    ============================================================ */
@@ -517,6 +676,30 @@ select {
   .editor-layout {
     flex-direction: column;
     gap: 16px;
+  }
+
+  /* 富文本工具栏：按钮多，窄屏下换行成多排并压缩尺寸，避免横向溢出撑破卡片。
+     用 flex-wrap 而非横向滚动 —— 滚动条在移动端 WebView 里体验差。 */
+  .rt-toolbar {
+    gap: 3px;
+    padding: 6px;
+  }
+
+  .rt-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+
+  .rt-group + .rt-group {
+    margin-left: 4px;
+    padding-left: 4px;
+  }
+
+  .rt-surface {
+    min-height: 300px;
+    padding: 14px;
   }
 
   /* 顶栏：允许换行，避免链接和用户信息挤成一团 */

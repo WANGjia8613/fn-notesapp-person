@@ -1,95 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { notesApi, workspaceApi, authApi, attachmentApi } from '../api'
+import { notesApi, workspaceApi, authApi } from '../api'
 import NoteSidebar from '../components/NoteSidebar'
-
-const tabBtn: React.CSSProperties = {
-  padding: '6px 14px',
-  border: 'none',
-  borderRadius: 6,
-  fontSize: 14,
-  cursor: 'pointer',
-}
-
-// mermaid 改为动态 import：它连同 elk / cytoscape / katex 等依赖体积超过 2MB，
-// 顶层静态引入会让首屏主包涨到 1MB 以上，而绝大多数笔记根本不含 mermaid 代码块。
-// 只有真正渲染到 ```mermaid 时才去加载，首次渲染会多一次网络往返（已加 loading 态）。
-let mermaidPromise: Promise<typeof import('mermaid')['default']> | null = null
-
-function loadMermaid() {
-  if (!mermaidPromise) {
-    mermaidPromise = import('mermaid').then((m) => {
-      const mermaid = m.default
-      mermaid.initialize({ startOnLoad: false, theme: 'default' })
-      return mermaid
-    })
-  }
-  return mermaidPromise
-}
-
-function MermaidBlock({ code }: { code: string }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    loadMermaid()
-      .then((mermaid) => {
-        if (cancelled || !containerRef.current) return
-        const id = `mmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-        return mermaid.render(id, code).then(({ svg }) => {
-          if (cancelled) return
-          if (containerRef.current) containerRef.current.innerHTML = svg
-          setError('')
-          setLoading(false)
-        })
-      })
-      .catch((err) => {
-        if (cancelled) return
-        setError(err instanceof Error ? err.message : String(err))
-        setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [code])
-
-  if (error) {
-    return (
-      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: 12, fontSize: 13, color: '#991b1b' }}>
-        <strong>Mermaid 渲染失败：</strong>
-        <pre style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap' }}>{error}</pre>
-      </div>
-    )
-  }
-  return (
-    <>
-      {loading && (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>图表加载中...</div>
-      )}
-      <div ref={containerRef} style={{ margin: '12px 0', textAlign: 'center' }} />
-    </>
-  )
-}
-
-const markdownComponents = {
-  code({ inline, className, children, ...props }: any) {
-    const match = /language-mermaid/.test(className || '')
-    if (!inline && match) {
-      const code = String(children).replace(/\n$/, '')
-      return <MermaidBlock code={code} />
-    }
-    return (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    )
-  },
-}
+import MarkdownBody from '../components/MarkdownBody'
+import RichTextBody from '../components/RichTextBody'
+import { useImageUpload } from '../components/editor/useImageUpload'
 
 export default function NoteEditor() {
   const { id } = useParams()
@@ -97,7 +12,13 @@ export default function NoteEditor() {
   const isNew = !id
 
   const [title, setTitle] = useState('')
+  // 正文按格式分派两条互斥路径：
+  //   markdown -> 存量笔记，走 MarkdownBody（react-markdown + Mermaid，原样保留）
+  //   html     -> 新笔记，走 RichTextBody（TipTap 所见即所得）
+  const [bodyFormat, setBodyFormat] = useState<'markdown' | 'html'>('markdown')
   const [bodyMd, setBodyMd] = useState('')
+  const [bodyJson, setBodyJson] = useState('')
+  const [bodyHtml, setBodyHtml] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [dueAt, setDueAt] = useState('')
   const [remindAt, setRemindAt] = useState('')
@@ -105,10 +26,13 @@ export default function NoteEditor() {
   const [memberIds, setMemberIds] = useState<string[]>([])
   const [candidates, setCandidates] = useState<{ id: string; name: string; email?: string }[]>([])
   const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
-  const [showPreview, setShowPreview] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  // 数据到位前不挂编辑器：否则 TipTap 会先用空内容初始化再被异步内容覆盖，
+  // 出现一次闪烁 + 焦点跳动
+  const [loaded, setLoaded] = useState(false)
+
+  // 附件补绑：新建笔记时插入的图片，笔记创建成功后补挂到笔记上（修既有游离缺陷）
+  const { flushPending } = useImageUpload(id)
 
   // 团队成员列表（用于私有笔记的共享选择，排除自己）
   useEffect(() => {
@@ -123,7 +47,10 @@ export default function NoteEditor() {
         .get(id)
         .then((note) => {
           setTitle(note.title)
+          setBodyFormat(note.bodyFormat === 'html' ? 'html' : 'markdown')
           setBodyMd(note.bodyMd || '')
+          setBodyJson(note.bodyJson || '')
+          setBodyHtml(note.bodyHtml || '')
           setTags(note.tags)
           setDueAt(note.dueAt ? note.dueAt.slice(0, 16) : '')
           setRemindAt(note.remindAt ? note.remindAt.slice(0, 16) : '')
@@ -131,6 +58,12 @@ export default function NoteEditor() {
           setMemberIds((note.members ?? []).map((m) => m.userId))
         })
         .catch((e) => setError(e.message))
+        .finally(() => setLoaded(true))
+    } else {
+      // 新建笔记默认富文本。仍可用 /new?format=markdown 走 Markdown 路径。
+      const sp = new URLSearchParams(window.location.search)
+      setBodyFormat(sp.get('format') === 'markdown' ? 'markdown' : 'html')
+      setLoaded(true)
     }
   }, [id])
 
@@ -142,9 +75,14 @@ export default function NoteEditor() {
     setSaving(true)
     setError('')
     try {
+      // 三段正文一起给，后端 normalizeBody 会按 bodyFormat 强制互斥，
+      // 前端传错也不会污染数据（不依赖前端自律）
       const payload = {
         title,
+        bodyFormat,
         bodyMd,
+        bodyJson,
+        bodyHtml,
         tags,
         dueAt: dueAt ? new Date(dueAt).toISOString() : null,
         remindAt: remindAt ? new Date(remindAt).toISOString() : null,
@@ -153,6 +91,8 @@ export default function NoteEditor() {
       }
       const saved = isNew ? await notesApi.create(payload) : await notesApi.update(id!, payload)
       if (isNew) {
+        // 修复既有缺陷：新建笔记时上传的附件（noteId 为空）在此补挂到笔记上
+        await flushPending(saved.id)
         navigate(`/notes/${saved.id}`)
       } else {
         // 保存成功轻提示
@@ -180,87 +120,14 @@ export default function NoteEditor() {
     }
   }
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    setError('')
-    try {
-      const att = await attachmentApi.upload(file, id)
-      const url = `/api/attachments/${att.id}/download`
-      const md = att.mimeType.startsWith('image/')
-        ? `![${att.filename}](${url})`
-        : `[${att.filename}](${url})`
-      setBodyMd((prev) => {
-        const sep = prev === '' || prev.endsWith('\n') ? '' : '\n'
-        return prev + sep + md + '\n'
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '上传失败')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
   return (
     <div className="editor-layout animate-in">
       <div className="glass-card" style={{ flex: 1, minWidth: 340, padding: 24 }}>
-        {/* 标签切换 + 操作按钮 */}
+        {/* 元信息行：格式角标 + 保存/删除。附件按钮与预览 tab 已移入 MarkdownBody*/}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-          <div
-            style={{
-              display: 'flex',
-              gap: 4,
-              background: 'rgba(0,0,0,0.04)',
-              padding: 4,
-              borderRadius: 10,
-            }}
-          >
-            <button
-              onClick={() => setShowPreview(false)}
-              style={{
-                padding: '7px 16px',
-                border: 'none',
-                borderRadius: 7,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: !showPreview ? 'white' : 'transparent',
-                color: !showPreview ? 'var(--primary-dark)' : 'var(--text-secondary)',
-                boxShadow: !showPreview ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              ✏️ 编辑
-            </button>
-            <button
-              onClick={() => setShowPreview(true)}
-              style={{
-                padding: '7px 16px',
-                border: 'none',
-                borderRadius: 7,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: showPreview ? 'white' : 'transparent',
-                color: showPreview ? 'var(--primary-dark)' : 'var(--text-secondary)',
-                boxShadow: showPreview ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              👁️ 预览
-            </button>
-          </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="btn-secondary btn-sm"
-            style={{ opacity: uploading ? 0.6 : 1 }}
-          >
-            {uploading ? '上传中...' : '📎 附件'}
-          </button>
-          <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleUpload} />
+          <span className="tag" title="正文格式：富文本笔记与 Markdown 笔记的编辑方式不同" style={{ opacity: 0.85 }}>
+            {bodyFormat === 'html' ? '富文本' : 'Markdown'}
+          </span>
           <div style={{ flex: 1 }} />
           <button id="save-toast" onClick={save} disabled={saving} className="btn-primary btn-sm">
             {saving ? '保存中...' : '💾 保存'}
@@ -306,27 +173,24 @@ export default function NoteEditor() {
           </div>
         )}
 
-        {/* 编辑区 / 预览区 */}
-        {showPreview ? (
-          <div className="markdown-body" style={{ minHeight: 400, lineHeight: 1.75 }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-              {bodyMd || '*暂无内容，开始写作吧 ✨*'}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <textarea
-            value={bodyMd}
-            onChange={(e) => setBodyMd(e.target.value)}
-            placeholder="在这里用 Markdown 写作... 支持 # 标题、**粗体**、- 列表、```mermaid 图表等"
-            className="input-glass"
-            style={{
-              minHeight: 440,
-              fontSize: 14,
-              fontFamily: "'SF Mono', 'Fira Code', ui-monospace, Menlo, monospace",
-              resize: 'vertical',
-              lineHeight: 1.7,
+        {/* 正文区：按 bodyFormat 分派两条互斥路径。
+            富文本侧不给「预览」tab —— 所见即所得下预览是反模式；
+            Markdown 侧必须保留，因为 Mermaid 图表只在预览态经 MermaidBlock 渲染。 */}
+        {!loaded ? (
+          <div style={{ minHeight: 440, color: 'var(--text-muted)', padding: '20px 0' }}>加载中...</div>
+        ) : bodyFormat === 'html' ? (
+          <RichTextBody
+            key={id ?? 'new'}
+            noteId={id}
+            bodyJson={bodyJson}
+            bodyHtml={bodyHtml}
+            onChange={({ bodyJson: j, bodyHtml: h }) => {
+              setBodyJson(j)
+              setBodyHtml(h)
             }}
           />
+        ) : (
+          <MarkdownBody bodyMd={bodyMd} onChange={setBodyMd} noteId={id} onError={setError} />
         )}
       </div>
 

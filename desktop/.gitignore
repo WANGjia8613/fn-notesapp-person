@@ -31,3 +31,8 @@ sign-metadata*.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# 上游根 .gitignore 的 build/ 规则会忽略本目录，但这里的 build/ 存放的是
+# 构建资源（应用图标、签名钩子），并非构建输出，必须纳入版本控制。
+!build/
+!build/**

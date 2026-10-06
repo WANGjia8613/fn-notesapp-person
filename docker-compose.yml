@@ -44,6 +44,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # AI 周总结：LLM API Key 加密密钥，留空则从 JWT_SECRET 派生
+      LLM_ENCRYPTION_KEY: ${LLM_ENCRYPTION_KEY:-}
       UPLOAD_DIR: /app/uploads
       # seed 用：不传进来时 `npm run seed` 只能拿到脚本里的默认值，
       # 导致 .env 里配置的 SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD 形同虚设

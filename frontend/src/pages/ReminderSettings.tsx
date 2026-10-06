@@ -558,6 +558,9 @@ export default function ReminderSettings() {
                 }} style={{ accentColor: 'var(--primary)' }} />
                 🔔 Webhook{webhooks.length === 0 ? '（未配置）' : ''}
               </label>
+              {aiCfg.channels.length === 0 && (
+                <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}>请至少选择一个发送渠道</span>
+              )}
             </div>
 
             <div>
@@ -572,7 +575,7 @@ export default function ReminderSettings() {
             </div>
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <button onClick={handleAiSave} disabled={aiSaving} className="btn-primary btn-sm" style={{ opacity: aiSaving ? 0.6 : 1 }}>
+              <button onClick={handleAiSave} disabled={aiSaving || aiCfg.channels.length === 0} className="btn-primary btn-sm" style={{ opacity: aiSaving || aiCfg.channels.length === 0 ? 0.6 : 1 }}>
                 {aiSaving ? '保存中...' : '💾 保存'}
               </button>
               <button onClick={handleAiGenerateNow} disabled={aiGenerating || !aiCfg.enabled || !aiLlmConfigured || aiCfg.channels.length === 0} className="btn-secondary btn-sm" style={{ opacity: aiGenerating || !aiCfg.enabled || !aiLlmConfigured || aiCfg.channels.length === 0 ? 0.6 : 1 }}>

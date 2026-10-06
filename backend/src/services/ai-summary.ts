@@ -78,51 +78,111 @@ async function collectWeekNotes(userId: string, workspaceId: string, role: strin
 }
 
 /** 构造发给 LLM 的用户消息 */
-function buildUserPrompt(notes: NoteForSummary[], customPrompt: string): string {
+function buildUserPrompt(notes: NoteForSummary[]): string {
   const lines: string[] = []
   lines.push(`# 本周笔记（共 ${notes.length} 篇）`)
   lines.push('')
 
   let total = 0
+  let included = 0
   for (const note of notes) {
     const due = note.dueAt ? `（到期：${new Date(note.dueAt).toLocaleDateString('zh-CN')}）` : ''
     const tags = note.tags.length ? `标签：${note.tags.join(', ')}` : ''
     const block = `## ${note.title}${due}\n${tags}\n\n${note.bodyText}\n`
     if (total + block.length > TOTAL_PROMPT_LIMIT) {
-      lines.push(`\n> 其余 ${notes.length - lines.filter((l) => l.startsWith('## ')).length} 篇笔记因长度限制未包含`)
+      lines.push(`\n> 其余 ${notes.length - included} 篇笔记因长度限制未包含`)
       break
     }
     lines.push(block)
     total += block.length
-  }
-
-  if (customPrompt.trim()) {
-    lines.push('')
-    lines.push('## 用户附加要求')
-    lines.push(customPrompt.trim())
+    included++
   }
 
   return lines.join('\n')
 }
 
-/** 把 LLM 返回的 Markdown 转成简单 HTML 邮件 */
+/** 行内元素转换：粗体、行内代码（输入已 escape） */
+function inlineFormat(text: string): string {
+  return text
+    .replace(/`([^`]+)`/g, '<code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+}
+
+/**
+ * 把 LLM 返回的 Markdown 转成邮件 HTML（内联样式，兼容邮件客户端）。
+ * 按行分块处理：先识别块级元素（标题/列表/引用），再处理行内元素，
+ * 避免块级元素之间产生多余 <br/>。
+ */
 function markdownToEmailHtml(md: string): string {
-  // 极简 Markdown → HTML，只处理邮件里需要的几种元素
-  let html = escapeHtml(md)
-  // 标题
-  html = html.replace(/^### (.+)$/gm, '<h3 style="margin:16px 0 8px;font-size:16px;">$1</h3>')
-  html = html.replace(/^## (.+)$/gm, '<h2 style="margin:20px 0 10px;font-size:18px;">$1</h2>')
-  html = html.replace(/^# (.+)$/gm, '<h1 style="margin:24px 0 12px;font-size:20px;">$1</h1>')
-  // 粗体
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-  // 列表
-  html = html.replace(/^- (.+)$/gm, '<li style="margin:4px 0;">$1</li>')
-  html = html.replace(/(<li[^>]*>.*<\/li>\n?)+/g, (m) => `<ul style="margin:8px 0;padding-left:20px;">${m}</ul>`)
-  // 引用
-  html = html.replace(/^> (.+)$/gm, '<blockquote style="border-left:3px solid #cbd5e1;margin:8px 0;padding:4px 12px;color:#64748b;">$1</blockquote>')
-  // 换行
-  html = html.replace(/\n/g, '<br/>')
-  return html
+  const lines = md.split('\n')
+  const out: string[] = []
+
+  let listType: 'ul' | 'ol' | null = null
+
+  const closeList = () => {
+    if (listType) {
+      out.push(`</${listType}>`)
+      listType = null
+    }
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+
+    // 空行：只用于结束列表，不输出 br
+    if (!line) {
+      closeList()
+      continue
+    }
+
+    let m: RegExpMatchArray | null
+
+    // 标题
+    if ((m = line.match(/^(#{1,3})\s+(.+)$/))) {
+      closeList()
+      const level = m[1].length
+      const sizes = { 1: 20, 2: 18, 3: 16 }
+      const margins = { 1: '24px 0 12px', 2: '20px 0 10px', 3: '16px 0 8px' }
+      out.push(`<h${level} style="margin:${margins[level as 1 | 2 | 3]};font-size:${sizes[level as 1 | 2 | 3]}px;">${inlineFormat(escapeHtml(m[2]))}</h${level}>`)
+      continue
+    }
+
+    // 引用
+    if ((m = line.match(/^>\s*(.*)$/))) {
+      closeList()
+      out.push(`<blockquote style="border-left:3px solid #cbd5e1;margin:8px 0;padding:4px 12px;color:#64748b;">${inlineFormat(escapeHtml(m[1]))}</blockquote>`)
+      continue
+    }
+
+    // 无序列表
+    if ((m = line.match(/^[-*]\s+(.+)$/))) {
+      if (listType !== 'ul') {
+        closeList()
+        out.push('<ul style="margin:8px 0;padding-left:22px;">')
+        listType = 'ul'
+      }
+      out.push(`<li style="margin:4px 0;">${inlineFormat(escapeHtml(m[1]))}</li>`)
+      continue
+    }
+
+    // 有序列表
+    if ((m = line.match(/^\d+[.)]\s+(.+)$/))) {
+      if (listType !== 'ol') {
+        closeList()
+        out.push('<ol style="margin:8px 0;padding-left:22px;">')
+        listType = 'ol'
+      }
+      out.push(`<li style="margin:4px 0;">${inlineFormat(escapeHtml(m[1]))}</li>`)
+      continue
+    }
+
+    // 普通段落
+    closeList()
+    out.push(`<p style="margin:8px 0;line-height:1.7;">${inlineFormat(escapeHtml(line))}</p>`)
+  }
+
+  closeList()
+  return out.join('\n')
 }
 
 /**
@@ -179,7 +239,7 @@ export async function runAiSummaryForUser(
 
   // 调用 LLM
   const systemPrompt = cfg.prompt.trim() ? `${DEFAULT_SYSTEM_PROMPT}\n\n用户额外要求：${cfg.prompt.trim()}` : DEFAULT_SYSTEM_PROMPT
-  const userPrompt = buildUserPrompt(notes, '')
+  const userPrompt = buildUserPrompt(notes)
   const result = await chatCompletion(
     { baseUrl: llmConfig.baseUrl, apiKey, model: llmConfig.model },
     [
@@ -223,11 +283,12 @@ export async function runAiSummaryForUser(
   }
 
   if (channels.includes('webhook')) {
-    const whCount = await sendUserWebhooks(userId, {
+    const wh = await sendUserWebhooks(userId, {
       title: subject,
       body: result.content,
     })
-    webhookOk = whCount >= 0 // 只要不报错就算成功（没配置 webhook 也是 0）
+    // 配置了 webhook（total>0）但全部失败才算失败；没配置 webhook（total=0）不视为失败
+    webhookOk = wh.total === 0 || wh.sent > 0
   }
 
   const allOk = emailOk && webhookOk

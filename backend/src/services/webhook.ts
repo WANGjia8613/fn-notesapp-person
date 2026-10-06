@@ -51,13 +51,19 @@ export async function sendWebhook(
 }
 
 /**
- * 向某个用户所有已启用的 webhook 推送消息（多渠道）
+ * 向某个用户所有已启用的 webhook 推送消息（多渠道）。
+ * 返回 total（配置总数）和 sent（成功数）：
+ * - total=0 表示用户没配置 webhook（调用方不应视为失败）
+ * - total>0 且 sent=0 表示全部推送失败（应视为失败）
  */
-export async function sendUserWebhooks(userId: string, payload: WebhookPayload): Promise<number> {
+export async function sendUserWebhooks(
+  userId: string,
+  payload: WebhookPayload,
+): Promise<{ total: number; sent: number }> {
   const webhooks = await prisma.webhookConfig.findMany({
     where: { userId, enabled: true },
   })
-  if (webhooks.length === 0) return 0
+  if (webhooks.length === 0) return { total: 0, sent: 0 }
 
   let sent = 0
   for (const wh of webhooks) {
@@ -69,5 +75,5 @@ export async function sendUserWebhooks(userId: string, payload: WebhookPayload):
       console.error(`[webhook] 推送失败 ${wh.name}: ${result.error}`)
     }
   }
-  return sent
+  return { total: webhooks.length, sent }
 }

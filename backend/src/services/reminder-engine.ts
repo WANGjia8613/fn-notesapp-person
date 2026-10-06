@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../prisma.js'
 import { sendMail } from './mail.js'
 import { runSummaries } from './summary-service.js'
+import { runAiSummaries } from './ai-summary.js'
 import { sendUserWebhooks } from './webhook.js'
 import { escapeHtml, escapeTags } from '../utils/html.js'
 
@@ -260,6 +261,7 @@ async function tick() {
     await syncNoteReminders()
     await triggerDueReminders()
     await runSummaries()
+    await runAiSummaries()
   } catch (err) {
     // 引擎在容器启动瞬间就会跑一次，而首次部署时 migrate 往往是紧接着才执行的。
     // 表还没建时 Prisma 会抛 P2021/P2022，原来会把整段调用栈打到日志里，

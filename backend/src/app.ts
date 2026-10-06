@@ -13,6 +13,8 @@ import reminderRoutes from './routes/reminders.js'
 import calendarRoutes from './routes/calendar.js'
 import webhookRoutes from './routes/webhooks.js'
 import attachmentRoutes from './routes/attachments.js'
+import llmRoutes from './routes/llm.js'
+import aiSummaryRoutes from './routes/ai-summary.js'
 import { startReminderEngine } from './services/reminder-engine.js'
 
 export function buildApp() {
@@ -64,6 +66,8 @@ export function buildApp() {
   app.register(calendarRoutes)
   app.register(webhookRoutes, { prefix: '/api/webhooks' })
   app.register(attachmentRoutes, { prefix: '/api/attachments' })
+  app.register(llmRoutes, { prefix: '/api/llm' })
+  app.register(aiSummaryRoutes, { prefix: '/api/ai-summary' })
 
   // 启动 M2 提醒引擎（每分钟扫描到期提醒 + 汇总）
   startReminderEngine()

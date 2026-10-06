@@ -18,6 +18,7 @@ model Workspace {
   invitations Invitation[]
   reminders   Reminder[]
   attachments Attachment[]
+  llmConfig   LlmConfig?
 }
 
 model User {
@@ -37,6 +38,7 @@ model User {
   reminders    Reminder[]
   summaryConfigs SummaryConfig[]
   webhookConfigs WebhookConfig[]
+  aiSummaryConfig AiSummaryConfig?
 
   @@unique([workspaceId, email])
   @@index([workspaceId])
@@ -177,6 +179,46 @@ model WebhookConfig {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// ========== M4 AI 每周总结 ==========
+
+// LLM 配置（workspace 级，由 owner/admin 配置，所有成员共用）。
+// apiKey 加密存储（AES-256-GCM），不明文落库，前端永远拿不到明文。
+// 一个 workspace 只允许一条配置（@@unique([workspaceId])）。
+// enabled 是 workspace 级总开关：owner 关闭后所有成员 AI 总结立即停止，
+// 但成员各自的 AiSummaryConfig 保留，重新开启后自动恢复。
+// 采用 OpenAI 兼容接口（/chat/completions），覆盖 OpenAI / DeepSeek / 通义千问 /
+// Kimi / 智谱 GLM / 本地 Ollama 等绝大多数服务商。
+model LlmConfig {
+  id                String    @id @default(cuid())
+  workspaceId       String    @unique
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider          String    @default("custom") // openai / deepseek / qwen / kimi / glm / ollama / custom
+  baseUrl           String    // 如 https://api.openai.com/v1
+  apiKeyEncrypted   String    // AES-256-GCM 加密后的 API Key
+  model             String    // 模型名，如 gpt-4o-mini / deepseek-chat
+  enabled           Boolean   @default(true)
+  createdById       String    // 配置者 userId（审计）
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// AI 每周总结配置（用户级，每人一条）。
+// 成员只需选择：是否启用、周几发送、几点发、发哪些渠道、是否自定义提示词。
+// LLM 由 workspace owner 统一配置，成员不需要也不能看到 API Key。
+model AiSummaryConfig {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  enabled   Boolean  @default(false)
+  // 发送渠道：email / webhook，可多选，至少一个
+  channels  String[] @default(["email"])
+  weekday   Int      @default(1) // 0=周日 1=周一 ... 6=周六，默认周一
+  time      String   @default("09:00") // HH:MM 24小时制
+  prompt    String   @default("") // 自定义提示词，留空用系统默认
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ========== M3 附件 ==========

@@ -7,6 +7,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 
 /**
  * 极简 .env 加载器（零依赖，故意不引入 dotenv）。
@@ -134,17 +135,35 @@ function parseTrustProxy(): boolean | string[] {
     .filter(Boolean)
 }
 
+/**
+ * LLM API Key 加密密钥。
+ *
+ * 可选配置：显式设置 LLM_ENCRYPTION_KEY 时用它；未设置时从 JWT_SECRET 派生
+ * （SHA-256 取前 32 字节），保证零额外配置也能运行。
+ * 之所以不做成 fail-fast：AI 总结是可选功能，不启用 LLM 时不需要这个密钥，
+ * 不应该因为没配它就阻止整个应用启动。
+ */
+function resolveLlmEncryptionKey(jwtSecret: string): string {
+  const explicit = process.env.LLM_ENCRYPTION_KEY?.trim()
+  if (explicit) return explicit
+  return createHash('sha256').update(`llm-key-encryption:${jwtSecret}`).digest('hex').slice(0, 32)
+}
+
+const _jwtSecret = requireStrongSecret('JWT_SECRET')
+
 export const config = {
   nodeEnv: optional('NODE_ENV', 'development'),
   port: Number(optional('PORT', '3000')) || 3000,
   /** 信任哪些反向代理地址（默认仅私网段，见 parseTrustProxy 说明） */
   trustProxy: parseTrustProxy(),
-  jwtSecret: requireStrongSecret('JWT_SECRET'),
+  jwtSecret: _jwtSecret,
   jwtExpiresIn: optional('JWT_EXPIRES_IN', '7d'),
   corsOrigins: parseCorsOrigins(),
   uploadDir: optional('UPLOAD_DIR', ''),
   /** 日志与提醒时间统一使用该时区，避免容器默认 UTC 导致提醒时间偏移 */
   timeZone: optional('TZ', 'Asia/Shanghai'),
+  /** LLM API Key 加密密钥（AES-256-GCM），未显式配置时从 JWT_SECRET 派生 */
+  llmEncryptionKey: resolveLlmEncryptionKey(_jwtSecret),
   /** 实际加载到的 .env 路径（仅用于启动日志，便于排查本地开发配置问题） */
   envFile: loadedEnvFile,
 }

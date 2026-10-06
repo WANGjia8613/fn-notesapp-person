@@ -1,4 +1,4 @@
-import type { User, Note, Invitation, SummaryConfig, ReminderRecord, WebhookConfig, Attachment } from './types'
+import type { User, Note, Invitation, SummaryConfig, ReminderRecord, WebhookConfig, Attachment, LlmConfig, AiSummaryConfig } from './types'
 
 const API_BASE = '/api'
 
@@ -143,4 +143,20 @@ export const attachmentApi = {
       body: JSON.stringify({ noteId }),
     }),
   remove: (id: string) => api<{ success: boolean }>(`/attachments/${id}`, { method: 'DELETE' }),
+}
+
+// ========== LLM 配置（workspace 级，owner/admin 管理）==========
+export const llmApi = {
+  getConfig: () => api<LlmConfig | null>('/llm/config'),
+  updateConfig: (data: Partial<LlmConfig> & { apiKey?: string }) =>
+    api<LlmConfig>('/llm/config', { method: 'PUT', body: JSON.stringify(data) }),
+  test: () => api<{ ok: boolean; error?: string; preview?: string }>('/llm/test', { method: 'POST' }),
+}
+
+// ========== AI 周总结（用户级）==========
+export const aiSummaryApi = {
+  getConfig: () => api<{ config: AiSummaryConfig; llmConfigured: boolean }>('/ai-summary/config'),
+  updateConfig: (data: Partial<AiSummaryConfig>) =>
+    api<AiSummaryConfig>('/ai-summary/config', { method: 'PUT', body: JSON.stringify(data) }),
+  generateNow: () => api<{ ok: boolean; reason?: string }>('/ai-summary/generate-now', { method: 'POST' }),
 }

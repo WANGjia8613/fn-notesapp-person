@@ -84,3 +84,28 @@ export interface Attachment {
   createdAt: string
   uploadedBy?: { name: string }
 }
+
+/** LLM 配置（workspace 级，由 owner/admin 管理）。apiKey 永远不返回明文。 */
+export interface LlmConfig {
+  id?: string
+  provider: 'openai' | 'deepseek' | 'qwen' | 'kimi' | 'glm' | 'ollama' | 'custom'
+  baseUrl: string
+  model: string
+  enabled: boolean
+  /** 是否已配置 API Key（前端拿不到明文） */
+  apiKeySet: boolean
+}
+
+/** AI 周总结配置（用户级） */
+export interface AiSummaryConfig {
+  id?: string
+  enabled: boolean
+  /** 发送渠道，可多选：email / webhook */
+  channels: ('email' | 'webhook')[]
+  /** 周几发送：0=周日 1=周一 ... 6=周六 */
+  weekday: number
+  /** 发送时间 HH:MM */
+  time: string
+  /** 自定义提示词，留空用系统默认 */
+  prompt: string
+}

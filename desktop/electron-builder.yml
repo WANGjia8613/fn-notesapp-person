@@ -1,0 +1,39 @@
+appId: com.fnnote.desktop
+productName: 笔记
+copyright: Copyright © 2026 fn-notes
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+asar: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build/icon.ico
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  # 自定义签名钩子：由 SIGN_MODE 环境变量决定是否签名、用哪种证书后端。
+  # 未设置 SIGN_MODE（或设为 off）时静默跳过签名，打包行为与之前完全一致。
+  # 详见 build/sign.js 与 docs/代码签名指南.md
+  sign: build/sign.js
+  # 只签可执行文件，跳过 .blockmap / .yml 等附属产物
+  signAndEditExecutable: true
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 笔记
+  artifactName: ${productName}-安装程序-${version}.${ext}
+portable:
+  artifactName: ${productName}-绿色版-${version}.${ext}
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/

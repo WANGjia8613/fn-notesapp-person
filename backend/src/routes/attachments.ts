@@ -4,6 +4,7 @@ import { randomUUID, randomBytes, createHash, timingSafeEqual } from 'crypto'
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { prisma } from '../prisma.js'
 import { canViewNote, noteVisibilityWhere, canEditNote } from '../utils/note-access.js'
+import { buildContentDisposition } from '../utils/content-disposition.js'
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads')
 const MAX_SIZE = 50 * 1024 * 1024 // 50MB
@@ -65,9 +66,14 @@ export default async function attachmentRoutes(app: FastifyInstance) {
   // 列出附件（可按 noteId 筛选）—— 私有笔记的附件只对可见者开放
   app.get('/', { preHandler: [app.authenticate] }, async (request) => {
     const { noteId } = request.query as { noteId?: string }
-    const where: Record<string, unknown> = {
-      workspaceId: request.user.workspaceId,
-      OR: [{ noteId: null }, { note: noteVisibilityWhere(request.user) }],
+    const where: Record<string, unknown> = { workspaceId: request.user.workspaceId }
+    // 修复：owner 的 noteVisibilityWhere() 返回 {}（不加限制），而 Prisma 会丢弃
+    // OR 里的空对象分支，整个 OR 于是塌缩成 { noteId: null } ——
+    // owner 反而看不到任何已绑定笔记的附件，按 noteId 筛选恒为空。
+    // 只在确有可见性限制时才拼 OR。
+    const visibility = noteVisibilityWhere(request.user)
+    if (visibility.OR) {
+      where.OR = [{ noteId: null }, { note: visibility }]
     }
     if (noteId) where.noteId = noteId
     return prisma.attachment.findMany({
@@ -216,10 +222,10 @@ export default async function attachmentRoutes(app: FastifyInstance) {
       reply.header('Content-Type', canInline ? att.mimeType : 'application/octet-stream')
       reply.header('Content-Length', att.size.toString())
       // 非白名单类型强制下载，绝不在本站源下渲染
-      reply.header(
-        'Content-Disposition',
-        `${canInline ? 'inline' : 'attachment'}; filename="${safeFilename(att.filename)}"; filename*=UTF-8''${encodeURIComponent(safeFilename(att.filename))}`,
-      )
+      // 修复：原先把原始文件名直接拼进 filename="..."，中文/emoji 会让 Node 的
+      // setHeader 抛 ERR_INVALID_CHAR，下载请求直接 500（富文本插图表现为破图）。
+      // 现在改为 ASCII 回退名 + RFC 5987 的 filename*，兼容性与原名还原都保住。
+      reply.header('Content-Disposition', buildContentDisposition(att.filename, canInline))
       reply.header('X-Content-Type-Options', 'nosniff')
       // 双保险：即便将来白名单放宽，也让附件里的脚本拿不到本站凭据
       reply.header('Content-Security-Policy', "default-src 'none'; sandbox")

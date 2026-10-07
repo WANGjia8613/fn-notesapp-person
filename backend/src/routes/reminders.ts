@@ -4,6 +4,13 @@ import { sendMail, isMailConfigured } from '../services/mail.js'
 import { escapeHtml } from '../utils/html.js'
 
 export default async function reminderRoutes(app: FastifyInstance) {
+  // 邮件推送是否可用。
+  // 前端据此在「提醒设置」页顶部显示一条横幅：没配 SMTP 时提醒一定会失败，
+  // 与其让用户对着一堆 failed 记录困惑，不如直接把原因和修法摆出来。
+  app.get('/api/reminders/mail-status', { preHandler: [app.authenticate] }, async () => ({
+    configured: isMailConfigured(),
+  }))
+
   // 列出当前用户的提醒记录
   app.get('/api/reminders', { preHandler: [app.authenticate] }, async (request) => {
     const userId = request.user.userId
@@ -28,7 +35,8 @@ export default async function reminderRoutes(app: FastifyInstance) {
       const user = await prisma.user.findUnique({ where: { id: request.user.userId } })
       if (!user) return { ok: false, error: '用户不存在' }
 
-      const mode = isMailConfigured() ? 'SMTP 真实发送' : 'LOG 模式（未配置 SMTP，邮件内容打印在服务端日志）'
+      // 措辞要如实：未配 SMTP 时邮件不会发出去，也不会再往日志里打正文
+      const mode = isMailConfigured() ? 'SMTP 真实发送' : '未配置 SMTP（邮件未发送）'
       const result = await sendMail({
         to: user.email,
         subject: '📧 笔记系统邮件测试',

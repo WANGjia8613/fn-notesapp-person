@@ -6,6 +6,19 @@ import { attachmentApi } from '../../api'
 const INLINE_SAFE_MIME = /^image\/(png|jpeg|gif|webp)$/i
 
 /**
+ * 「笔记还没创建时上传的附件」待补绑队列。
+ *
+ * 必须是模块级而不是 useRef：上传发生在 RichTextBody 内部，而 flushPending
+ * 由 NoteEditor 调用，两者是**两个不同的 hook 实例**，各自 useRef 拿到的是
+ * 两个互不共享的数组 —— 结果是 flushPending 永远读到空数组，补绑静默失效，
+ * 新建笔记里的图片全部停留在 noteId=null 的游离状态。
+ *
+ * 放在模块作用域后，两个实例读写的是同一份队列。
+ * 同一时刻只有一个编辑器在挂载（切换笔记会先卸载旧的），因此不存在串笔记的问题。
+ */
+let pendingAttachmentIds: string[] = []
+
+/**
  * 富文本插图链路：选文件 → 上传 → 拿 shareToken → 拼带 ?t= 的 URL → setImage。
  *
  * 为什么必须带 token：浏览器 `<img>` 标签发不出 Authorization 头，
@@ -16,7 +29,7 @@ const INLINE_SAFE_MIME = /^image\/(png|jpeg|gif|webp)$/i
  * 原来 NoteEditor 在新建时 noteId 为 undefined，上传不带 noteId，
  * 笔记建好后附件永远游离。这里用一个 pending 队列兜住：
  *   1) 新建时照常不带 noteId 上传（noteId 为空时后端存 null，允许）；
- *   2) 把 attachmentId 记进 pendingRef；
+ *   2) 把 attachmentId 记进模块级待补绑队列；
  *   3) 笔记首次创建成功后调flushPending(savedId) 逐个补绑。
  * 图片 URL 用的是 attachmentId + shareToken，与是否已绑定无关，
  * 所以「保存前插的图」在绑定前也能正常显示。
@@ -25,7 +38,6 @@ export function useImageUpload(noteId?: string) {
   const [uploading, setUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<Editor | null>(null)
-  const pendingRef = useRef<string[]>([])
 
   /** 由 RichTextBody 在编辑器创建后回填，避免 hook 与 useEditor 循环依赖 */
   const attach = (editor: Editor | null) => {
@@ -56,7 +68,7 @@ export function useImageUpload(noteId?: string) {
     setUploading(true)
     try {
       const att = await attachmentApi.upload(file, noteId)
-      if (!noteId) pendingRef.current.push(att.id)
+      if (!noteId) pendingAttachmentIds.push(att.id)
       const editor = editorRef.current
       if (!editor) return
 
@@ -93,8 +105,8 @@ export function useImageUpload(noteId?: string) {
 
   /** 笔记首次创建成功后调用：把「保存前上传」的附件补挂到笔记上 */
   const flushPending = async (createdNoteId: string) => {
-    const ids = [...pendingRef.current]
-    pendingRef.current = []
+    const ids = [...pendingAttachmentIds]
+    pendingAttachmentIds = []
     if (ids.length === 0) return
     await Promise.all(
       ids.map((id) => attachmentApi.bindToNote(id, createdNoteId).catch(() => {})),

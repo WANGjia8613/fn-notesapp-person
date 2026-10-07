@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../prisma.js'
 import { config } from '../config.js'
 import { encrypt, decrypt } from '../utils/crypto.js'
-import { checkLLMBaseUrl } from '../utils/url-safety.js'
+import { checkOutboundUrl } from '../utils/url-safety.js'
 import { testConnection } from '../services/llm.js'
 
 const llmSchema = z.object({
@@ -55,7 +55,7 @@ export default async function llmRoutes(app: FastifyInstance) {
     const data = parsed.data
 
     // SSRF 防护：拦截非 http(s) 协议与云元数据/链路本地地址（内网本地模型仍放行）
-    const urlErr = checkLLMBaseUrl(data.baseUrl)
+    const urlErr = checkOutboundUrl(data.baseUrl)
     if (urlErr) {
       return reply.code(400).send({ error: urlErr })
     }

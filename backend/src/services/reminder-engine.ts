@@ -165,6 +165,64 @@ async function syncNoteReminders() {
 }
 
 /**
+ * 原子地「认领」一条提醒：把 pending 改成 sending，拿到发送权。
+ *
+ * 为什么不直接用「先查 SendLog 有没有 sent 记录、没有就发」：
+ * 那是典型的 TOCTOU —— 两个实例（或两个 tick）同时查到「没发过」，
+ * 于是都去发，收件人收到两封。而 SendLog 的唯一约束要到写日志时才起作用，
+ * 那时邮件已经发出去了，去重只能事后补记，拦不住重复投递。
+ *
+ * 做法：在事务里用 SELECT ... FOR UPDATE SKIP LOCKED 拿行锁。
+ * - 拿到锁的实例才继续；
+ * - 拿不到的（SKIP LOCKED）说明别人正在处理，直接跳过，不阻塞；
+ * - 锁在事务结束时就释放，进程崩溃由数据库回滚，不会留下永久占用。
+ *
+ * @returns true = 本进程获得了发送权；false = 别人在处理或已经发过了
+ */
+async function claimReminder(id: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "Reminder" WHERE "id" = ${id} FOR UPDATE SKIP LOCKED
+    `
+    if (locked.length === 0) return false
+
+    // 拿到锁后再判一次幂等：可能另一个实例已经发完并写了 sent 日志
+    const alreadySent = await tx.sendLog.findFirst({
+      where: { reminderId: id, status: 'sent' },
+    })
+    if (alreadySent) {
+      // 补上 sentAt：否则界面上会看到「已发送」却显示空的发送时间
+      await tx.reminder.update({ where: { id }, data: { status: 'sent', sentAt: alreadySent.sentAt } })
+      return false
+    }
+
+    await tx.reminder.update({ where: { id }, data: { status: 'sending' } })
+    return true
+  })
+}
+
+/**
+ * 回收上一轮遗留的 sending 行。
+ *
+ * sending 只存在于「认领成功 → 发送落库」这一小段窗口内。若进程在这中间崩溃，
+ * 这行就永远停在 sending，再也进不了待发队列 —— 提醒直接消失。
+ * 与其让它卡死，不如重置回 pending 让它重新参与调度。
+ *
+ * 单实例下 tick 由 running 标志保证串行，不会误伤自己正在发的那条；
+ * 多实例下有极小概率把别人正在发的重置掉，代价是一封重复邮件，
+ * 这个后果比「提醒永久消失」轻得多。
+ */
+async function reclaimStuckSending() {
+  const res = await prisma.reminder.updateMany({
+    where: { status: 'sending', type: { in: ['due', 'remind'] } },
+    data: { status: 'pending' },
+  })
+  if (res.count > 0) {
+    console.warn(`[reminder-engine] 回收 ${res.count} 条卡在 sending 的提醒，已重置为 pending`)
+  }
+}
+
+/**
  * 触发到期的 pending 提醒。
  * 修复：原实现在发送失败后把状态置为 failed，下一轮 sync 发现没有
  * pending/sent 记录就再建一条新的，形成「每分钟重试、永不停止」的重试风暴。
@@ -185,14 +243,9 @@ async function triggerDueReminders() {
   })
 
   for (const reminder of pending) {
-    // 幂等：已发过就不再发
-    const alreadySent = await prisma.sendLog.findFirst({
-      where: { reminderId: reminder.id, status: 'sent' },
-    })
-    if (alreadySent) {
-      await prisma.reminder.update({ where: { id: reminder.id }, data: { status: 'sent' } })
-      continue
-    }
+    // 先原子认领，拿不到发送权就跳过（别人正在发或已发过）
+    const claimed = await claimReminder(reminder.id)
+    if (!claimed) continue
 
     const to = reminder.user?.email || reminder.note?.author?.email
     if (!to) {
@@ -219,6 +272,15 @@ async function triggerDueReminders() {
             : reminder.title,
         }).catch(() => {})
       }
+    } else if (result.misconfigured) {
+      // 没配 SMTP 属于配置缺失，重试多少次都不会成功。
+      // 直接定案为 failed 并把原因写进日志，让用户能在提醒记录里看到
+      // 「未配置 SMTP」，而不是看到一条永远重试不出去的 pending。
+      await prisma.reminder.update({
+        where: { id: reminder.id },
+        data: { status: 'failed', attemptCount: attempts },
+      })
+      await logSend(reminder.id, null, 'failed', result.error)
     } else {
       const exhausted = attempts >= MAX_ATTEMPTS
       await prisma.reminder.update({
@@ -258,6 +320,7 @@ async function tick() {
   if (running) return
   running = true
   try {
+    await reclaimStuckSending()
     await syncNoteReminders()
     await triggerDueReminders()
     await runSummaries()

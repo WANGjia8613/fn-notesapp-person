@@ -7,6 +7,21 @@ import { useToast } from '../Toast'
 const INLINE_SAFE = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 
 /**
+ * 「笔记还没创建时上传的附件」待补绑队列。
+ *
+ * 必须是模块级而不是 useRef：上传发生在 RichTextBody 内部，而 flushPending
+ * 由 NoteEditor 调用，两者是**两个不同的 hook 实例**，各自 useRef 拿到的是
+ * 两个互不共享的数组 —— flushPending 恒读到空数组，补绑静默失效。
+ *
+ * 这个 bug 还有第二个后果：下面那段「卸载时清理游离附件」的逻辑，原本靠
+ * pendingRef 空来判断「已经补绑过了」，于是保存成功、图片已被正文引用之后，
+ * 编辑器因为 key 变化重新挂载，旧实例卸载时把刚用的图片从服务端删掉了。
+ * 改成本模块共享队列后，flushPending 会先把队列清空，卸载清理自然变成空操作，
+ * 只在「插了图但没保存就离开」时才真正触发清理。
+ */
+let pendingAttachmentIds: string[] = []
+
+/**
  * 图片上传 hook：
  * - pickAndInsert：弹出文件选择 -> 上传 -> 用签名 URL 插入编辑器
  * - attach：接管编辑器的粘贴/拖拽图片事件，同样走上传通道
@@ -16,7 +31,6 @@ export function useImageUpload(noteId?: string) {
   const [uploading, setUploading] = useState(false)
   const toast = useToast()
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const pendingRef = useRef<string[]>([]) // 新建笔记时待补绑的附件 id
 
   // 上传单张图片，返回可内联的签名 URL
   const uploadOne = useCallback(
@@ -31,7 +45,7 @@ export function useImageUpload(noteId?: string) {
       }
       try {
         const att = await attachmentApi.upload(file, noteId)
-        if (!noteId) pendingRef.current.push(att.id) // 笔记还没创建，先记下来待补绑
+        if (!noteId) pendingAttachmentIds.push(att.id) // 笔记还没创建，先记下来待补绑
         return await attachmentUrl(att.id, att.shareToken)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : '图片上传失败')
@@ -124,19 +138,24 @@ export function useImageUpload(noteId?: string) {
   // 新建笔记保存成功后：把游离附件补挂到笔记
   const flushPending = useCallback(
     async (newNoteId: string) => {
-      const ids = [...pendingRef.current]
-      pendingRef.current = []
+      const ids = [...pendingAttachmentIds]
+      pendingAttachmentIds = []
       await Promise.all(ids.map((id) => attachmentApi.bindToNote(id, newNoteId).catch(() => {})))
     },
     [],
   )
 
-  // 组件卸载时清理游离附件（未保存就关闭的图）
+  // 组件卸载时清理游离附件（插了图但没保存就关闭编辑器）
+  //
+  // 遍历的是模块级共享队列：保存成功时 flushPending 已经把它清空，
+  // 所以这里在「正常保存后离开」的场景下是空操作，不会误删已被正文引用的图片。
+  // 只有真的没保存就走，队列里还留着 id，才会触发删除。
   useEffect(() => {
     return () => {
-      // 仅清理仍未补绑的；失败静默，后端有孤儿附件回收兜底
-      pendingRef.current.forEach((id) => attachmentApi.remove(id).catch(() => {}))
-      pendingRef.current = []
+      const ids = [...pendingAttachmentIds]
+      pendingAttachmentIds = []
+      // 失败静默，后端有孤儿附件回收兜底
+      ids.forEach((id) => attachmentApi.remove(id).catch(() => {}))
     }
   }, [])
 

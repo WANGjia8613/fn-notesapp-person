@@ -134,6 +134,8 @@ function RecordsTab({ toast }: { toast: Toast }) {
   const [records, setRecords] = useState<ReminderRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
+  // null = 还没查到；false 时要显式提示，否则用户只看到一片 failed 却不知为何
+  const [mailConfigured, setMailConfigured] = useState<boolean | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -144,11 +146,15 @@ function RecordsTab({ toast }: { toast: Toast }) {
   }
   useEffect(load, [filter])
 
+  useEffect(() => {
+    reminderApi.mailStatus().then((r) => setMailConfigured(r.configured)).catch(() => setMailConfigured(null))
+  }, [])
+
   const testEmail = async () => {
     try {
       const r = await reminderApi.testEmail()
       if (r.ok) toast.success(`测试邮件已发送（${r.mode}）`)
-      else toast.error(r.error || '发送失败')
+      else toast.error(`${r.error || '发送失败'}。请在 NAS 的 .env 中配置 SMTP_HOST / SMTP_USER / SMTP_PASS 后重启后端。`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '发送失败')
     }
@@ -158,6 +164,25 @@ function RecordsTab({ toast }: { toast: Toast }) {
 
   return (
     <Section title="提醒记录" desc="系统按笔记的到期/提醒时间自动生成的提醒历史">
+      {mailConfigured === false && (
+        <div
+          style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 10,
+            padding: '12px 14px',
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#b91c1c',
+            lineHeight: 1.6,
+          }}
+        >
+          <strong>⚠️ 服务端未配置 SMTP，提醒邮件不会发送</strong>
+          <div style={{ marginTop: 4 }}>
+            相关提醒会被标记为 failed。请在 NAS 的 .env 中配置 SMTP_HOST / SMTP_USER / SMTP_PASS，然后重启后端服务。
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input-glass" style={{ width: 150 }}>
           <option value="">全部状态</option>

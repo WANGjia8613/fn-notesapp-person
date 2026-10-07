@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import DOMPurify from 'dompurify'
 import { attachmentApi } from '../api'
 
 /**
@@ -26,11 +27,31 @@ function loadMermaid() {
   if (!mermaidPromise) {
     mermaidPromise = import('mermaid').then((m) => {
       const mermaid = m.default
-      mermaid.initialize({ startOnLoad: false, theme: 'default' })
+      // 显式锁 strict，不依赖 mermaid 的默认行为。
+      // 笔记正文可被共享给其他成员，而渲染结果是用 innerHTML 写进 DOM 的；
+      // loose 会放行图表里的 HTML 标签与点击事件，形成存储型 XSS。
+      // 与桌面端保持同一取值，避免两端安全口径不一致。
+      mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' })
       return mermaid
     })
   }
   return mermaidPromise
+}
+
+/**
+ * mermaid 渲染结果的二次净化。
+ *
+ * mermaid 配了 securityLevel:'strict' 会自行净化，这里再加一层是纵深防御：
+ * 笔记正文可被共享给其他成员，而下面这处是直接写 innerHTML 的，
+ * 万一将来有人把 securityLevel 改回 loose（或升级后默认行为变化），
+ * 还有一道独立闸门挡住 <script> / on* 事件 / foreignObject。
+ *
+ * 口径说明（查 dompurify 源码确认）：svg profile 的标签集已包含 style
+ * —— mermaid v11+ 把图表样式放在内嵌 <style> 里，所以图表外观不会掉；
+ * 同时它不含 script 与 foreignObject，正好挡住真正危险的两种载体。
+ */
+function sanitizeSvg(svg: string): string {
+  return DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })
 }
 
 function MermaidBlock({ code }: { code: string }) {
@@ -47,7 +68,7 @@ function MermaidBlock({ code }: { code: string }) {
         const id = `mmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         return mermaid.render(id, code).then(({ svg }) => {
           if (cancelled) return
-          if (containerRef.current) containerRef.current.innerHTML = svg
+          if (containerRef.current) containerRef.current.innerHTML = sanitizeSvg(svg)
           setError('')
           setLoading(false)
         })

@@ -1,4 +1,5 @@
 import { prisma } from '../prisma.js'
+import { checkOutboundUrl } from '../utils/url-safety.js'
 
 interface WebhookPayload {
   title: string
@@ -67,6 +68,15 @@ export async function sendUserWebhooks(
 
   let sent = 0
   for (const wh of webhooks) {
+    // 发送前再校验一次。写库时的校验挡不住**存量数据**：在加校验之前就已经存进来的
+    // 地址、seed 数据、或直接改库产生的记录都不会经过路由。而这里是所有推送的
+    // 唯一出口，兜在这里才能真正关掉 SSRF。
+    const urlErr = checkOutboundUrl(wh.url)
+    if (urlErr) {
+      console.error(`[webhook] 跳过 ${wh.name}：地址未通过安全校验（${urlErr}）`)
+      continue
+    }
+
     const result = await sendWebhook(wh.url, wh.type, payload)
     if (result.ok) {
       sent++

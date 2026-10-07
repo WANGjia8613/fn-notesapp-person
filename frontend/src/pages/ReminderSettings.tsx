@@ -120,10 +120,13 @@ export default function ReminderSettings() {
   const [aiGenResult, setAiGenResult] = useState('')
   // 当前用户角色（判断是否可管理 LLM）
   const [userRole, setUserRole] = useState('')
+  // 服务端是否配了 SMTP。null = 尚未查到；false 时要显式提示，
+  // 否则用户只看到一堆 failed 却不知道原因
+  const [mailConfigured, setMailConfigured] = useState<boolean | null>(null)
 
   const load = async () => {
     try {
-      const [cfg, list, cal, whs, llm, ai, me] = await Promise.all([
+      const [cfg, list, cal, whs, llm, ai, me, mail] = await Promise.all([
         summaryApi.getConfig(),
         reminderApi.list(),
         calendarApi.getSubscribeUrl(),
@@ -131,6 +134,7 @@ export default function ReminderSettings() {
         llmApi.getConfig().catch(() => null),
         aiSummaryApi.getConfig().catch(() => null),
         authApi.me().catch(() => null),
+        reminderApi.mailStatus().catch(() => null),
       ])
       setConfigs(cfg)
       setReminders(list)
@@ -150,6 +154,7 @@ export default function ReminderSettings() {
         setAiLlmConfigured(ai.llmConfigured)
       }
       if (me) setUserRole(me.role)
+      setMailConfigured(mail ? mail.configured : null)
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败')
     }
@@ -170,9 +175,13 @@ export default function ReminderSettings() {
     try {
       const r = await reminderApi.testEmail()
       if (r.ok) {
-        setTestResult(r.mode === 'log' ? '✅ 测试邮件已生成（LOG 模式：内容打印在服务端日志，未真实发送。配置 SMTP_HOST 后将真实发送）' : '✅ 测试邮件已发送，请查收邮箱')
+        setTestResult('✅ 测试邮件已发送，请查收邮箱')
       } else {
-        setTestResult(`❌ 发送失败：${r.error}`)
+        // 未配 SMTP 时后端返回 ok=false，这里把「怎么修」直接说清楚，
+        // 否则用户只看到「发送失败」，不知道要去补哪个配置
+        setTestResult(
+          `❌ ${r.error || '发送失败'}。请在 .env 中配置 SMTP_HOST / SMTP_USER / SMTP_PASS 后重启后端服务。`,
+        )
       }
     } catch (e) {
       setTestResult(`❌ ${e instanceof Error ? e.message : '发送失败'}`)
@@ -264,6 +273,26 @@ export default function ReminderSettings() {
       {error && (
         <div style={{ color: '#dc2626', marginBottom: 12, background: 'rgba(220,38,38,0.08)', padding: 12, borderRadius: 8 }}>
           {error}
+        </div>
+      )}
+
+      {mailConfigured === false && (
+        <div
+          style={{
+            background: 'rgba(239,68,68,0.08)',
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 10,
+            padding: '12px 14px',
+            marginBottom: 16,
+            fontSize: 13,
+            color: '#b91c1c',
+            lineHeight: 1.6,
+          }}
+        >
+          <strong>⚠️ 服务端未配置 SMTP，提醒邮件不会发送</strong>
+          <div style={{ marginTop: 4 }}>
+            相关提醒会被标记为 failed。请在 .env 中配置 SMTP_HOST / SMTP_USER / SMTP_PASS，然后重启后端服务。
+          </div>
         </div>
       )}
 

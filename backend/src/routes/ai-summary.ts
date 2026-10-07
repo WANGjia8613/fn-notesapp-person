@@ -58,22 +58,46 @@ export default async function aiSummaryRoutes(app: FastifyInstance) {
   })
 
   // 立即生成一份 AI 总结（手动测试，不影响本周自动发送）
-  app.post('/generate-now', async (request, reply) => {
-    const userId = request.user.userId
+  //
+  // 限流：这是全站唯一一个「点一下就真花钱」的接口——每次调用都会走一次 LLM
+  // 请求，并按渠道发出邮件/推送。没有限流时，前端连点或脚本循环会直接把
+  // workspace 的 token 配额烧穿，且账单不由点的人承担（LLM 配置是 workspace 级的）。
+  // 单次生成通常要十几秒，5 次/分钟对正常使用绰绰有余，又能挡住刷接口。
+  app.post(
+    '/generate-now',
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
+          // 默认 429 响应体是英文的 "Rate limit exceeded, retry in 1 minute"，
+          // 前端直接把它当提示语显示。这里换成中文，并说清要等多久。
+          // 注意：返回普通对象即可，插件会原样作为响应体发出；
+          // 若返回 Error 实例，Fastify 会套一层 {error:"Too Many Requests"} 覆盖掉。
+          errorResponseBuilder: () => ({
+            statusCode: 429,
+            error: '生成过于频繁，请 1 分钟后再试',
+          }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const userId = request.user.userId
 
-    // 检查 workspace LLM 是否配置
-    const llm = await prisma.llmConfig.findUnique({ where: { workspaceId: request.user.workspaceId } })
-    if (!llm || !llm.enabled) {
-      return reply.code(400).send({ error: '管理员尚未配置或启用 LLM' })
-    }
+      // 检查 workspace LLM 是否配置
+      const llm = await prisma.llmConfig.findUnique({ where: { workspaceId: request.user.workspaceId } })
+      if (!llm || !llm.enabled) {
+        return reply.code(400).send({ error: '管理员尚未配置或启用 LLM' })
+      }
 
-    const userCfg = await prisma.aiSummaryConfig.findUnique({ where: { userId } })
-    if (!userCfg || !userCfg.enabled) {
-      return reply.code(400).send({ error: '请先在设置中启用 AI 周总结' })
-    }
+      const userCfg = await prisma.aiSummaryConfig.findUnique({ where: { userId } })
+      if (!userCfg || !userCfg.enabled) {
+        return reply.code(400).send({ error: '请先在设置中启用 AI 周总结' })
+      }
 
-    // 手动模式：跳过时间窗口与自动发送幂等，日志独立记录
-    const result = await runAiSummaryForUser(userId, new Date(), { manual: true })
-    return { ok: result.sent, reason: result.reason }
-  })
+      // 手动模式：跳过时间窗口与自动发送幂等，日志独立记录
+      const result = await runAiSummaryForUser(userId, new Date(), { manual: true })
+      return { ok: result.sent, reason: result.reason }
+    },
+  )
 }

@@ -49,6 +49,14 @@ model Note {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   authorId    String
+  /// 这里**故意**不写 onDelete: Cascade（数据库侧即默认的 ON DELETE RESTRICT）。
+  ///
+  /// 原因：笔记是核心资产。若级联删除，移除一个写了几十篇笔记的成员，
+  /// 会把这些笔记一起带走 —— 对团队是灾难性的数据丢失。
+  ///
+  /// 真正的「移除成员」应当走软删除（禁用登录、保留数据）或先把其笔记移交给他人，
+  /// 而不是物理删除 user 行。当前代码没有任何删除用户的入口，
+  /// 因此这条外键不会触发；将来若要加移除成员功能，请先决定数据归属再动这里。
   author      User      @relation(fields: [authorId], references: [id])
   title       String
   bodyMd      String    @default("")
@@ -230,6 +238,8 @@ model Attachment {
   noteId       String?
   note         Note?     @relation(fields: [noteId], references: [id], onDelete: SetNull)
   uploadedById String
+  /// 同 Note.author：故意不级联。附件可能被多篇笔记引用，
+  /// 删除上传者不该把团队还在用的文件一起删掉。见 Note.author 处的说明。
   uploadedBy   User      @relation(fields: [uploadedById], references: [id])
   filename     String
   mimeType     String

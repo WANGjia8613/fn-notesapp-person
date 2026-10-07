@@ -103,6 +103,8 @@ export const reminderApi = {
     api<{ ok: boolean; mode: string; messageId?: string; error?: string }>('/reminders/test-email', {
       method: 'POST',
     }),
+  /** 后端是否配置了 SMTP。未配置时提醒必然失败，前端据此给出明确提示 */
+  mailStatus: () => api<{ configured: boolean }>('/reminders/mail-status'),
 }
 
 // ========== 日历订阅 ==========

@@ -1,6 +1,6 @@
 {
   "name": "fn-notes-desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "自研笔记软件 · Windows 桌面版（Markdown + 富文本 + 自动提醒），连接飞牛 NAS 后端",
   "author": "fn-notes",
